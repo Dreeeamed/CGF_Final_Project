@@ -11,7 +11,6 @@
 #include "castle_geometry.h"
 #include "material.h"
 
-// Student A: creates the window and draws the scene.
 int main() {
     if (!glfwInit()) {
         std::cout << "Could not start GLFW.\n";
