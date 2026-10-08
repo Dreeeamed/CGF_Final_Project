@@ -18,3 +18,4 @@ target_link_libraries(simple_castle PRIVATE glfw glad::glad glm::glm)
 # Shader text files are read relative to the working directory.
 set_property(TARGET simple_castle PROPERTY
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
