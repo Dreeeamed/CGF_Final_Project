@@ -1,7 +1,6 @@
 #pragma once
 
 #include <glad/glad.h>
-
 class CastleGeometry {
 public:
     void build();
