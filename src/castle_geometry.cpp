@@ -6,14 +6,12 @@
 
 namespace {
 
-// Only the three vertex attributes needed for basic texturing and lighting.
 struct Vertex {
     glm::vec3 position;
     glm::vec3 normal;
     glm::vec2 uv;
 };
 
-// A quad is two triangles: (a,b,c) and (a,c,d).
 void addQuad(std::vector<Vertex>& vertices,
              glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 d,
              float repeatU, float repeatV) {
@@ -28,22 +26,19 @@ void addQuad(std::vector<Vertex>& vertices,
     vertices.push_back({d, normal, {0.0f,    repeatV}});
 }
 
-} // namespace
+}
 
 void CastleGeometry::build() {
     std::vector<Vertex> vertices;
 
-    // Front wall. Three rectangles leave a visible doorway in the middle.
     addQuad(vertices, {-4, 0, 2}, {-1, 0, 2}, {-1, 3.5f, 2}, {-4, 3.5f, 2}, 3, 4);
     addQuad(vertices, { 1, 0, 2}, { 4, 0, 2}, { 4, 3.5f, 2}, { 1, 3.5f, 2}, 3, 4);
     addQuad(vertices, {-1, 2.4f, 2}, {1, 2.4f, 2}, {1, 3.5f, 2}, {-1, 3.5f, 2}, 2, 1);
 
-    // Back wall and left/right side walls (all are flat quads in 3D space).
     addQuad(vertices, { 4, 0,-2}, {-4, 0,-2}, {-4, 3.5f,-2}, { 4, 3.5f,-2}, 8, 4);
     addQuad(vertices, {-4, 0,-2}, {-4, 0, 2}, {-4, 3.5f, 2}, {-4, 3.5f,-2}, 4, 4);
     addQuad(vertices, { 4, 0, 2}, { 4, 0,-2}, { 4, 3.5f,-2}, { 4, 3.5f, 2}, 4, 4);
 
-    // Battlements: eight little rectangles on the front wall.
     for (int i = 0; i < 8; ++i) {
         float x = -4.0f + i;
         addQuad(vertices,
@@ -51,13 +46,11 @@ void CastleGeometry::build() {
                 {x + 0.65f, 4.1f, 2.01f}, {x, 4.1f, 2.01f}, 1, 1);
     }
 
-    // Ground plane. Its four corners are ordered so the normal points up.
     addQuad(vertices, {-7,-0.03f, 7}, {7,-0.03f, 7},
                       { 7,-0.03f,-7}, {-7,-0.03f,-7}, 8, 8);
 
     vertexCount = static_cast<GLsizei>(vertices.size());
 
-    // Transfer vertices to the GPU once; the castle is not animated.
     glGenVertexArrays(1, &vao);
     glGenBuffers(1, &vbo);
     glBindVertexArray(vao);
@@ -65,13 +58,13 @@ void CastleGeometry::build() {
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex),
                  vertices.data(), GL_STATIC_DRAW);
 
-    glEnableVertexAttribArray(0); // position
+    glEnableVertexAttribArray(0); 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                           reinterpret_cast<void*>(offsetof(Vertex, position)));
-    glEnableVertexAttribArray(1); // normal
+    glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                           reinterpret_cast<void*>(offsetof(Vertex, normal)));
-    glEnableVertexAttribArray(2); // UV texture coordinates
+    glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                           reinterpret_cast<void*>(offsetof(Vertex, uv)));
     glBindVertexArray(0);
