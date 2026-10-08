@@ -1,5 +1,4 @@
 #include "castle_geometry.h"
-
 #include <glm/glm.hpp>
 #include <vector>
 #include <cstddef>
