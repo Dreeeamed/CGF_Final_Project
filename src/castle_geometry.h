@@ -2,7 +2,6 @@
 
 #include <glad/glad.h>
 
-// Student B: flat rectangles that form the castle.
 class CastleGeometry {
 public:
     void build();
