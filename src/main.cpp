@@ -7,11 +7,16 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <string>
 
 #include "castle_geometry.h"
 #include "material.h"
 
-int main() {
+int main(int argc, char* argv[]) {
+    const bool smokeTest = argc == 2 && std::string(argv[1]) == "--smoke-test";
+    glfwSetErrorCallback([](int code, const char* description) {
+        std::cerr << "GLFW error " << code << ": " << description << '\n';
+    });
     if (!glfwInit()) {
         std::cout << "Could not start GLFW.\n";
         return -1;
@@ -20,6 +25,7 @@ int main() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    if (smokeTest) glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
     GLFWwindow* window = glfwCreateWindow(900, 650, "Simple Castle - Midterm",
                                           nullptr, nullptr);
@@ -36,6 +42,8 @@ int main() {
 
     glEnable(GL_DEPTH_TEST); // The closest surface appears in front.
     glfwSwapInterval(1);
+    std::cout << "OpenGL: " << glGetString(GL_VERSION) << '\n';
+    std::cout << "Renderer: " << glGetString(GL_RENDERER) << '\n';
 
     GLuint program = createShaderProgram();
     if (!program) {
@@ -56,6 +64,8 @@ int main() {
     float previousTime = static_cast<float>(glfwGetTime());
 
     std::cout << "A/D: rotate camera | W/S: zoom | Escape: quit\n";
+    int renderedFrames = 0;
+    int exitCode = 0;
 
     while (!glfwWindowShouldClose(window)) {
         float time = static_cast<float>(glfwGetTime());
@@ -99,6 +109,18 @@ int main() {
         glBindTexture(GL_TEXTURE_2D, texture);
         castle.draw();
         glfwSwapBuffers(window);
+        if (smokeTest) {
+            const GLenum error = glGetError();
+            if (error != GL_NO_ERROR) {
+                std::cerr << "OpenGL smoke test failed: " << error << '\n';
+                exitCode = 1;
+                break;
+            }
+            if (++renderedFrames == 3) {
+                std::cout << "Smoke test passed: 3 frames rendered.\n";
+                break;
+            }
+        }
     }
 
     castle.destroy();
@@ -106,7 +128,7 @@ int main() {
     glDeleteProgram(program);
     glfwDestroyWindow(window);
     glfwTerminate();
-    return 0;
+    return exitCode;
 }
 
 // TODO for final: add free-look mouse controls and collision detection.
