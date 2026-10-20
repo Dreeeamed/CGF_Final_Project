@@ -1,0 +1,17 @@
+# Visual Studio and local IDE settings
+.vs/
+.idea/
+*.user
+*.suo
+
+# CMake build directories and machine-specific presets
+/out/
+/build/
+/cmake-build-*/
+CMakeUserPresets.json
+
+# Compiler intermediate files
+*.obj
+*.pdb
+*.ilk
+*.idb
