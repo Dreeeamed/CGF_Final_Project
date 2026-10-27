@@ -56,14 +56,19 @@ void main() {
     vec3 n = normalize(Normal);
     if (dot(n,cameraPos-FragPos)<0.0) n=-n;
     if (Material == 11) {
-    // POM step 1: show the height map on the walls.
-    vec2 uv;
-    vec3 T, B;
-    wallFrame(FragPos, n, uv, T, B);
-    float h = texture(heightMap, uv).r;
-    FragColor = vec4(vec3(h), 1.0);
-    return;
-}
+        // POM step 2a: the direction to the eye, measured along the wall's own axes.
+        vec2 uv;
+        vec3 T, B;
+        wallFrame(FragPos, n, uv, T, B);
+        vec3 V = normalize(cameraPos - FragPos);
+        vec3 viewTS = vec3(dot(V, T), dot(V, B), dot(V, n));
+        const float heightScale = 0.05;  // deepest groove: 0.05 of a 4 m tile = 20 cm
+        float depth = 1.0 - texture(heightMap, uv).r;  // 0 = stone face, 1 = deepest groove
+        vec2 shiftedUV = uv - viewTS.xy / viewTS.z * depth * heightScale;
+        float h = texture(heightMap, shiftedUV).r;
+        FragColor = vec4(vec3(h), 1.0);
+        return;
+        }
     float variation = stoneVariation(FragPos,n);
     vec3 base = vec3(0.31,0.40,0.53)*variation;
     float specularStrength = 0.07;
