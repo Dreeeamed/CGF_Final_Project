@@ -7,6 +7,27 @@ out vec4 FragColor;
 uniform sampler2D stoneTexture;
 uniform vec3 cameraPos;
 uniform float time;
+uniform sampler2D heightMap;
+
+// One copy of the wall texture covers 4 x 4 metres.
+const float wallTileSize = 4.0;
+
+// Pick the axis the normal points along. T and B are the two directions
+// that lie IN the wall; the UV is the world position measured along them.
+void wallFrame(vec3 p, vec3 n, out vec2 uv, out vec3 T, out vec3 B) {
+    vec3 a = abs(n);
+    if (a.y > max(a.x, a.z)) {        // top or bottom of a wall block
+        T = vec3(1.0, 0.0, 0.0);
+        B = vec3(0.0, 0.0, 1.0);
+    } else if (a.z > a.x) {           // wall facing the camera
+        T = vec3(1.0, 0.0, 0.0);
+        B = vec3(0.0, 1.0, 0.0);
+    } else {                          // side face of a block
+        T = vec3(0.0, 0.0, 1.0);
+        B = vec3(0.0, 1.0, 0.0);
+    }
+    uv = vec2(dot(p, T), dot(p, B)) / wallTileSize;
+}
 
 float stoneVariation(vec3 p, vec3 n) {
     // World-space triplanar colour; this is not POM.
@@ -34,6 +55,15 @@ void main() {
     }
     vec3 n = normalize(Normal);
     if (dot(n,cameraPos-FragPos)<0.0) n=-n;
+    if (Material == 11) {
+    // POM step 1: show the height map on the walls.
+    vec2 uv;
+    vec3 T, B;
+    wallFrame(FragPos, n, uv, T, B);
+    float h = texture(heightMap, uv).r;
+    FragColor = vec4(vec3(h), 1.0);
+    return;
+}
     float variation = stoneVariation(FragPos,n);
     vec3 base = vec3(0.31,0.40,0.53)*variation;
     float specularStrength = 0.07;

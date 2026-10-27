@@ -120,7 +120,7 @@ void portal(Vertices& v, float cx, float base, float halfWidth, float spring,
             quad(v, a,{a.x,a.y,backZ},{b.x,b.y,backZ},b, Stone);
             if (wallTop > base+spring+rise+thickness) {
                 quad(v, {c.x,c.y,wallZ},{d.x,d.y,wallZ},
-                     {d.x,wallTop,wallZ},{c.x,wallTop,wallZ}, Stone);
+                     {d.x,wallTop,wallZ},{c.x,wallTop,wallZ}, Wall);
             }
             triangle(v, {cx,base+spring,backZ}, {a.x,a.y,backZ}, {b.x,b.y,backZ}, fill);
         }
@@ -153,7 +153,7 @@ void sideWall(Vertices& v, int side) {
     for (int i=0; i<layout::columnsPerSide; ++i) {
         const float x=columnX(i);
         box(v, {x-pier,0,std::min(z,z+side*1.0f)},
-               {x+pier,60,std::max(z,z+side*1.0f)});
+               {x+pier,60,std::max(z,z+side*1.0f)}, Wall);
         column(v, x, side*layout::rowZ);
     }
     for (int i=0; i<layout::columnsPerSide-1; ++i) {
@@ -163,11 +163,11 @@ void sideWall(Vertices& v, int side) {
         // A narrow high window above each gallery bay.
         portal(v,x,46,2.2f,6,3,z,side,60.0f,Window);
         box(v,{x-opening,44,std::min(z,z+side*1.0f)},
-              {x+opening,46,std::max(z,z+side*1.0f)});
+              {x+opening,46,std::max(z,z+side*1.0f)}, Wall);
         for (int half : {-1,1}) {
             const float a=x+half*2.9f, b=x+half*opening;
             box(v,{std::min(a,b),46,std::min(z,z+side*1.0f)},
-                  {std::max(a,b),60,std::max(z,z+side*1.0f)});
+                  {std::max(a,b),60,std::max(z,z+side*1.0f)}, Wall);
         }
         rod(v,{x,46,z-side*0.6f},{x,54.7f,z-side*0.6f},0.10f,Stone);
         rod(v,{x-2.1f,50,z-side*0.6f},{x+2.1f,50,z-side*0.6f},0.10f,Stone);
@@ -186,7 +186,7 @@ void sideWall(Vertices& v, int side) {
         const float a=end<0 ? layout::firstColumnX-pier : layout::lastColumnX+pier;
         const float b=end*layout::length*0.5f;
         box(v,{std::min(a,b),0,std::min(z,z+side*1.0f)},
-              {std::max(a,b),60,std::max(z,z+side*1.0f)});
+              {std::max(a,b),60,std::max(z,z+side*1.0f)}, Wall);
     }
 }
 
@@ -204,7 +204,7 @@ void roof(Vertices& v, Vertices& foreground) {
             // vault curve, so they never stick out above the roof. Like the roof,
             // the near half (side = +1) belongs to the cutaway foreground.
             for (float x : {-108.0f, 108.0f})
-                quad(target,{x,0,z0},{x,0,z1},{x,y1,z1},{x,y0,z0},Stone);
+                quad(target,{x,0,z0},{x,0,z1},{x,y1,z1},{x,y0,z0},Wall);
             for (int col=0; col<layout::columnsPerSide; ++col) {
                 const float x=columnX(col);
                 quad(target,{x-0.5f,y0-0.35f,z0},{x+0.5f,y0-0.35f,z0},

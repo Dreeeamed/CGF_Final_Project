@@ -65,9 +65,11 @@ int main(int argc, char* argv[]) {
 
     GLuint stoneProgram=createShaderProgram();
     GLuint hallProgram=createShaderProgram("shaders/hall.vert","shaders/hall.frag");
-    GLuint texture=loadTexture2D("assets/textures/stone_wall/albedo.png");
-    if (!stoneProgram || !hallProgram || !texture) {
-        glDeleteProgram(stoneProgram); glDeleteProgram(hallProgram); glDeleteTextures(1,&texture);
+    GLuint texture = loadTexture2D("assets/textures/stone_wall/albedo.png");
+    GLuint heightMap = loadTexture2D("assets/textures/stone_wall/height.png");
+    if (!stoneProgram || !hallProgram || !texture || !heightMap) {
+        glDeleteProgram(stoneProgram); glDeleteProgram(hallProgram);
+        glDeleteTextures(1, &texture); glDeleteTextures(1, &heightMap);
         glfwDestroyWindow(window); glfwTerminate(); return 1;
     }
     CastleGeometry castle;
@@ -77,6 +79,7 @@ int main(int argc, char* argv[]) {
     for (GLuint program : {stoneProgram,hallProgram}) {
         glUseProgram(program);
         glUniform1i(glGetUniformLocation(program,"stoneTexture"),0);
+        glUniform1i(glGetUniformLocation(program, "heightMap"), 1);
     }
 
     bool insideHall=true, showForeground=false, overview=false;
@@ -158,6 +161,9 @@ int main(int argc, char* argv[]) {
         glUniform1f(glGetUniformLocation(program,"time"),smokeTest?0.0f:time);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D,texture);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, heightMap);
+        glActiveTexture(GL_TEXTURE0);
         if (insideHall) {
             hall.architecture.draw();
             if (showForeground) hall.foreground.draw();
@@ -188,6 +194,7 @@ int main(int argc, char* argv[]) {
     }
     hall.destroy(); castle.destroy();
     glDeleteTextures(1,&texture);
+    glDeleteTextures(1, &heightMap);
     glDeleteProgram(hallProgram); glDeleteProgram(stoneProgram);
     glfwDestroyWindow(window); glfwTerminate();
     return exitCode;
