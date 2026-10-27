@@ -38,9 +38,10 @@ target_link_libraries(glad PRIVATE ${CMAKE_DL_LIBS})
 add_executable(simple_castle
     src/main.cpp
     src/castle_geometry.cpp
+    src/hall_geometry.cpp
     src/material.cpp
 )
-target_include_directories(simple_castle PRIVATE src)
+target_include_directories(simple_castle PRIVATE src third_party/stb)
 target_link_libraries(simple_castle PRIVATE glfw glad::glad glm::glm)
 target_compile_definitions(simple_castle PRIVATE GLFW_INCLUDE_NONE)
 

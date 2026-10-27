@@ -2,6 +2,6 @@
 
 #include <glad/glad.h>
 
-// Student C: basic GLSL program and one stone-color texture.
-GLuint createShaderProgram();
-GLuint createStoneTexture();
+GLuint createShaderProgram(const char* vertexPath = "shaders/stone.vert",
+                           const char* fragmentPath = "shaders/stone.frag");
+GLuint loadTexture2D(const char* path);

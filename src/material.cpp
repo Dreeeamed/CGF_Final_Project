@@ -1,5 +1,6 @@
 #include "material.h"
-
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -41,9 +42,9 @@ GLuint compileShader(GLenum type, const char* filename) {
 
 } // namespace
 
-GLuint createShaderProgram() {
-    GLuint vertex = compileShader(GL_VERTEX_SHADER, "shaders/stone.vert");
-    GLuint fragment = compileShader(GL_FRAGMENT_SHADER, "shaders/stone.frag");
+GLuint createShaderProgram(const char* vertexPath, const char* fragmentPath) {
+    GLuint vertex = compileShader(GL_VERTEX_SHADER, vertexPath);
+    GLuint fragment = compileShader(GL_FRAGMENT_SHADER, fragmentPath);
     if (!vertex || !fragment) {
         if (vertex) glDeleteShader(vertex);
         if (fragment) glDeleteShader(fragment);
@@ -69,39 +70,35 @@ GLuint createShaderProgram() {
     return program;
 }
 
-// Creates one 128 x 128 RGB brick-color texture in memory.
-// No normal map, height map, external image loader, or POM is used.
-GLuint createStoneTexture() {
-    const int size = 128;
-    std::vector<unsigned char> pixels(size * size * 3);
-
-    for (int y = 0; y < size; ++y) {
-        for (int x = 0; x < size; ++x) {
-            int brickRow = y / 32;
-            int shiftedX = (x + (brickRow % 2) * 32) % 64;
-            bool mortar = (y % 32 < 3) || (shiftedX < 3);
-
-            int shade = mortar ? 65 : 145 + ((x / 16 + y / 16) % 3) * 10;
-            int index = (y * size + x) * 3;
-            pixels[index]     = static_cast<unsigned char>(shade + 7);
-            pixels[index + 1] = static_cast<unsigned char>(shade + 5);
-            pixels[index + 2] = static_cast<unsigned char>(shade);
-        }
+// Load an image as RGBA and generate mipmaps for distant surfaces.
+GLuint loadTexture2D(const char* path) {
+    int width, height, channels = 0;
+    stbi_set_flip_vertically_on_load(true);
+    unsigned char* pixels = stbi_load(path, &width, &height, &channels, STBI_rgb_alpha);
+    if (!pixels) {
+        std::cerr << "Could not load texture: " << path << '\n';
+        std::cerr << stbi_failure_reason() << '\n';
+        return 0;
     }
-
-    GLuint texture;
+    GLuint texture = 0;
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, size, size, 0,
-                 GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+
+    glTexImage2D(
+        GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+
     glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glTexParameteri(
+        GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(
+        GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(
+        GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(
+        GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    stbi_image_free(pixels);
     glBindTexture(GL_TEXTURE_2D, 0);
     return texture;
 }
-
-// TODO for final: load real stone images and add advanced material effects.
+// TODO for final: use the height map for parallax occlusion mapping.
