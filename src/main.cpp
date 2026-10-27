@@ -83,12 +83,14 @@ int main(int argc, char* argv[]) {
     }
 
     bool insideHall=true, showForeground=false, overview=false;
-    bool wasC=false, wasO=false;
+    bool parallaxOn = true;// P: the headline technique on/off, for comparing
+    bool wasC=false, wasO=false, wasP=false;
     float knightX=-6.0f, cameraX=0.0f, distance=84.0f, lookHeight=24.0f;
     float previousTime=static_cast<float>(glfwGetTime());
     int renderedFrames=0, exitCode=0;
     std::cout << "F1 exterior | F2 hall | A/D walk | Shift faster | W/S zoom\n"
-                 "Up/Down look | C full hall / cutaway | O overview | Home reset | Esc quit\n";
+                 "Up/Down look | C full hall / cutaway | O overview | Home reset | Esc quit\n"
+                 "Up/Down look | C full hall / cutaway | O overview | P parallax | Home reset | Esc quit\n";;
     const char* captures[]={"hall-centre.ppm","hall-overview.ppm","hall-entrance.ppm",
                             "hall-throne.ppm","hall-full-row.ppm","exterior.ppm"};
     while (!glfwWindowShouldClose(window)) {
@@ -110,7 +112,11 @@ int main(int argc, char* argv[]) {
             distance=overview ? 154.0f : 84.0f;
             lookHeight=overview ? 26.0f : 24.0f;
         }
-        wasC=pressed(GLFW_KEY_C); wasO=pressed(GLFW_KEY_O);
+        if (pressed(GLFW_KEY_P) && !wasP) {
+			parallaxOn = !parallaxOn;
+            std::cout << "Parallax " << (parallaxOn ? "ON" : "OFF") << '\n';
+        }
+        wasC=pressed(GLFW_KEY_C); wasO=pressed(GLFW_KEY_O), wasP= pressed(GLFW_KEY_P);
         if (pressed(GLFW_KEY_HOME) && insideHall) {
             overview=false; showForeground=false; distance=84; lookHeight=24;
         }
@@ -159,6 +165,7 @@ int main(int argc, char* argv[]) {
         glUniform3fv(glGetUniformLocation(program,"cameraPos"),1,glm::value_ptr(cameraPos));
         glUniform3f(glGetUniformLocation(program,"lightPos"),-8,12,6);
         glUniform1f(glGetUniformLocation(program,"time"),smokeTest?0.0f:time);
+        glUniform1i(glGetUniformLocation(program, "parallaxOn"), parallaxOn);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D,texture);
         glActiveTexture(GL_TEXTURE1);

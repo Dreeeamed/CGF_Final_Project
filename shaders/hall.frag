@@ -8,6 +8,7 @@ uniform sampler2D stoneTexture;
 uniform vec3 cameraPos;
 uniform float time;
 uniform sampler2D heightMap;
+uniform bool parallaxOn;
 
 // One copy of the wall texture covers 4 x 4 metres.
 const float wallTileSize = 4.0;
@@ -64,7 +65,10 @@ void main() {
         vec3 viewTS = vec3(dot(V, T), dot(V, B), dot(V, n));
         const float heightScale = 0.05;  // deepest groove: 0.05 of a 4 m tile = 20 cm
         float depth = 1.0 - texture(heightMap, uv).r;  // 0 = stone face, 1 = deepest groove
-        vec2 shiftedUV = uv - viewTS.xy / viewTS.z * depth * heightScale;
+        vec2 shiftedUV = uv;
+        if(parallaxOn){
+            shiftedUV = uv - viewTS.xy/viewTS.z * depth * heightScale ;
+        }
         float h = texture(heightMap, shiftedUV).r;
         FragColor = vec4(vec3(h), 1.0);
         return;
