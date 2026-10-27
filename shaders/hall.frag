@@ -56,7 +56,7 @@ void main() {
     vec3 n = normalize(Normal);
     if (dot(n,cameraPos-FragPos)<0.0) n=-n;
     if (Material == 11) {
-        // POM step 2a: the direction to the eye, measured along the wall's own axes.
+        // POM step 2: simple parallax - shift the UV along the view ray by the depth under it.
         vec2 uv;
         vec3 T, B;
         wallFrame(FragPos, n, uv, T, B);
@@ -68,7 +68,7 @@ void main() {
         float h = texture(heightMap, shiftedUV).r;
         FragColor = vec4(vec3(h), 1.0);
         return;
-        }
+    }
     float variation = stoneVariation(FragPos,n);
     vec3 base = vec3(0.31,0.40,0.53)*variation;
     float specularStrength = 0.07;
