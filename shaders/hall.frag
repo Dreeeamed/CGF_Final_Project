@@ -57,17 +57,27 @@ void main() {
     vec3 n = normalize(Normal);
     if (dot(n,cameraPos-FragPos)<0.0) n=-n;
     if (Material == 11) {
-        // POM step 2: simple parallax - shift the UV along the view ray by the depth under it.
+        // Wall material: parallax occlusion mapping (POM) on the height map.
         vec2 uv;
         vec3 T, B;
         wallFrame(FragPos, n, uv, T, B);
         vec3 V = normalize(cameraPos - FragPos);
         vec3 viewTS = vec3(dot(V, T), dot(V, B), dot(V, n));
         const float heightScale = 0.05;  // deepest groove: 0.05 of a 4 m tile = 20 cm
-        float depth = 1.0 - texture(heightMap, uv).r;  // 0 = stone face, 1 = deepest groove
         vec2 shiftedUV = uv;
         if(parallaxOn){
-            shiftedUV = uv - viewTS.xy/viewTS.z * depth * heightScale ;
+            // POM step 4: walk along the view ray in thin layers until it goes below the stone.
+            const float layers = 32.0 ;
+            float layerDepth = 1.0 / layers;
+            vec2 deltaUV = viewTS.xy / viewTS.Z * heightScale / layers;
+            vec2 dx = FDdx(uv) , dy = dFdy(uv);
+            float rayDepth = 0.0;
+            float surfaceDepth = 1.0 -textureGrad(heightMap, shiftedUV, dx, dy).r;
+            while (rayDepth < surfaceDepth ){
+                shiftedUV-=deltaUV;
+                rayDepth += layerDepth ;
+                surfaceDepth = 1.0 - textureGrad(heightMap, shiftedUV, dx, dy).r;
+            }
         }
         float h = texture(heightMap, shiftedUV).r;
         FragColor = vec4(vec3(h), 1.0);
