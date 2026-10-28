@@ -89,7 +89,6 @@ int main(int argc, char* argv[]) {
     float previousTime=static_cast<float>(glfwGetTime());
     int renderedFrames=0, exitCode=0;
     std::cout << "F1 exterior | F2 hall | A/D walk | Shift faster | W/S zoom\n"
-                 "Up/Down look | C full hall / cutaway | O overview | Home reset | Esc quit\n"
                  "Up/Down look | C full hall / cutaway | O overview | P parallax | Home reset | Esc quit\n";;
     const char* captures[]={"hall-centre.ppm","hall-overview.ppm","hall-entrance.ppm",
                             "hall-throne.ppm","hall-full-row.ppm","exterior.ppm"};
@@ -113,10 +112,10 @@ int main(int argc, char* argv[]) {
             lookHeight=overview ? 26.0f : 24.0f;
         }
         if (pressed(GLFW_KEY_P) && !wasP) {
-			parallaxOn = !parallaxOn;
+		    parallaxOn = !parallaxOn;
             std::cout << "Parallax " << (parallaxOn ? "ON" : "OFF") << '\n';
         }
-        wasC=pressed(GLFW_KEY_C); wasO=pressed(GLFW_KEY_O), wasP= pressed(GLFW_KEY_P);
+        wasC = pressed(GLFW_KEY_C); wasO = pressed(GLFW_KEY_O); wasP = pressed(GLFW_KEY_P);
         if (pressed(GLFW_KEY_HOME) && insideHall) {
             overview=false; showForeground=false; distance=84; lookHeight=24;
         }
