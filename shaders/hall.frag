@@ -69,8 +69,8 @@ void main() {
             // POM step 4: walk along the view ray in thin layers until it goes below the stone.
             const float layers = 32.0 ;
             float layerDepth = 1.0 / layers;
-            vec2 deltaUV = viewTS.xy / viewTS.Z * heightScale / layers;
-            vec2 dx = FDdx(uv) , dy = dFdy(uv);
+            vec2 deltaUV = viewTS.xy / viewTS.z * heightScale / layers;
+            vec2 dx = dFdx(uv), dy = dFdy(uv);
             float rayDepth = 0.0;
             float surfaceDepth = 1.0 -textureGrad(heightMap, shiftedUV, dx, dy).r;
             while (rayDepth < surfaceDepth ){
