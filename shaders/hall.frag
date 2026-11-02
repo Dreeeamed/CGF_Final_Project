@@ -30,6 +30,40 @@ void wallFrame(vec3 p, vec3 n, out vec2 uv, out vec3 T, out vec3 B) {
     uv = vec2(dot(p, T), dot(p, B)) / wallTileSize;
 }
 
+const float heightScale = 0.05;
+float depthAt(vec2 uv, vec2 dx, vec2 dy){
+    return 1.0 - textureGrad(heightMap,uv,dx,dy).r;
+}
+
+vec2 parallaxUV(vec2 uv, vec3 viewTS, vec2 dx, vec2 dy){
+    float layers = mix(48.0,12.0,viewTS.z);
+    float layerDepth = 1.0/layers;
+
+    vec2 deltaUV = viewTS.xy/max(viewTS.z,0.2) * heightScale / layers;
+
+    float rayDepth = 1.0/layers;
+
+    vec2 deltaUV = viewTS.xy / max(viewTS.z,0.2) * heightScale / layers;
+
+    float rayDepth = 0.0;
+    float surfaceDepth = depthAt(uv , dx, dy);
+    vec2 previousUV = uv;
+    gapBefore = surfaceDepth;
+    for (int i = 0; i<64 && rayDepth < surfaceDepth; i++){
+        previousUV = uv;
+        gapBefore = surfaceDepth - rayDepth;
+        uv-=deltaUV;
+        rayDepth += layerDepth;
+        surfaceDepth = depthAt(uv,dx,dy);
+
+    }
+    if (rayDepth==0.0) return uv;
+    float gapAfter = surfaceDepth - rayDepth;
+    float weight = gapAfter / (gapAfter - gapBefore);
+    return mix(uv, previousUV, weight);
+
+}
+
 float stoneVariation(vec3 p, vec3 n) {
     // World-space triplanar colour; this is not POM.
     vec3 weights = pow(abs(n),vec3(4.0));
@@ -63,23 +97,9 @@ void main() {
         wallFrame(FragPos, n, uv, T, B);
         vec3 V = normalize(cameraPos - FragPos);
         vec3 viewTS = vec3(dot(V, T), dot(V, B), dot(V, n));
-        const float heightScale = 0.05;  // deepest groove: 0.05 of a 4 m tile = 20 cm
-        vec2 shiftedUV = uv;
-        if(parallaxOn){
-            // POM step 4: walk along the view ray in thin layers until it goes below the stone.
-            const float layers = 32.0 ;
-            float layerDepth = 1.0 / layers;
-            vec2 deltaUV = viewTS.xy / viewTS.z * heightScale / layers;
-            vec2 dx = dFdx(uv), dy = dFdy(uv);
-            float rayDepth = 0.0;
-            float surfaceDepth = 1.0 -textureGrad(heightMap, shiftedUV, dx, dy).r;
-            while (rayDepth < surfaceDepth ){
-                shiftedUV-=deltaUV;
-                rayDepth += layerDepth ;
-                surfaceDepth = 1.0 - textureGrad(heightMap, shiftedUV, dx, dy).r;
-            }
-        }
-        float h = texture(heightMap, shiftedUV).r;
+        vec2 dx = dFdx(uv), dy = dFdy(uv);
+        vec2 pomUV = parallaxOn ? parallaxUV(uv, viewTS, dx, dy) : uv;
+        float h = textureGrad(heightMap, pomUV, dx, dy).r;
         FragColor = vec4(vec3(h), 1.0);
         return;
     }
