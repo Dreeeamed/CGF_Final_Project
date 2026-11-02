@@ -61,21 +61,23 @@ vec2 parallaxUV(vec2 uv, vec3 viewTS, vec2 dx, vec2 dy){
     return mix(uv, previousUV, weight);
 
 }
+// POM step 7: from the point the eye sees, walk towards the light.
+// If stone rises above that path, the point is in shadow.
 const float shadowStrength = 8.0;
 float parallaxShadow(vec2 uv, float hitDepth, vec3 lightTS, vec2 dx, vec2 dy){
-    if (lightTS.z <= 0.0) return 0.0;//свет не падает на стену, значит тень не отбрасывается
+    if (lightTS.z <= 0.0) return 0.0;   // свет не падает на стену с этой стороны, значит в тени
     const int steps = 16;
     float layerDepth = hitDepth / float(steps);
     vec2 deltaUV = lightTS.xy / max(lightTS.z, 0.1) * heightScale * layerDepth;
     float rayDepth = hitDepth;
     float blocked = 0.0;
-    for (int i = 1; i<= steps; i++){
-        uv+= deltaUV;
+    for (int i = 1; i <= steps; i++){
+        uv += deltaUV;
         rayDepth -= layerDepth;
         float stoneAbove = rayDepth - depthAt(uv, dx, dy);
-        blocked = max(blocked, stoneAbove * (1.0 - float(i)/float(steps));
+        blocked = max(blocked, stoneAbove * (1.0 - float(i) / float(steps)));
     }
-    return 1.0 - clamp(blocked * shadowStrenght, 0.0, 1.0);
+    return 1.0 - clamp(blocked * shadowStrength, 0.0, 1.0);
 }
 
 float stoneVariation(vec3 p, vec3 n) {
@@ -115,12 +117,16 @@ void main() {
         vec3 viewTS = vec3(dot(V, T), dot(V, B), dot(V, n));
         vec2 dx = dFdx(uv), dy = dFdy(uv);
         vec2 pomUV = parallaxOn ? parallaxUV(uv, viewTS, dx, dy) : uv;
-                // POM step 7: self-shadowing, measured along the light in the wall's own axes.
+        // POM step 7: self-shadowing, measured along the light in the wall's own axes.
         vec3 L = normalize(lightDir);
         vec3 lightTS = vec3(dot(L, T), dot(L, B), dot(L, n));
         if (parallaxOn) wallShadow = parallaxShadow(pomUV, depthAt(pomUV, dx, dy), lightTS, dx, dy);
         FragColor = vec4(vec3(wallShadow), 1.0);
         return;
+        // POM step 6: colour and bumps of the stone at the point the eye really sees.
+        wallColour = textureGrad(stoneTexture, pomUV, dx, dy).rgb;
+        vec3 bump = textureGrad(normalMap, pomUV, dx, dy).rgb * 2.0 - 1.0;
+        n = normalize(T * bump.x + B * bump.y + n * bump.z);
     }
     float variation = stoneVariation(FragPos,n);
     vec3 base = vec3(0.31,0.40,0.53)*variation;
