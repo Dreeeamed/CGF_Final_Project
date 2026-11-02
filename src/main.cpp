@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 #include "castle_geometry.h"
+#include "garden_scene.h"
 #include "hall_geometry.h"
 #include "material.h"
 
@@ -65,10 +66,11 @@ int main(int argc, char* argv[]) {
 
     GLuint stoneProgram=createShaderProgram();
     GLuint hallProgram=createShaderProgram("shaders/hall.vert","shaders/hall.frag");
+    GLuint gardenProgram=createShaderProgram("shaders/garden.vert","shaders/garden.frag");
     GLuint texture = loadTexture2D("assets/textures/stone_wall/albedo.png");
     GLuint heightMap = loadTexture2D("assets/textures/stone_wall/height.png");
-    if (!stoneProgram || !hallProgram || !texture || !heightMap) {
-        glDeleteProgram(stoneProgram); glDeleteProgram(hallProgram);
+    if (!stoneProgram || !hallProgram || !gardenProgram || !texture || !heightMap) {
+        glDeleteProgram(stoneProgram); glDeleteProgram(hallProgram); glDeleteProgram(gardenProgram);
         glDeleteTextures(1, &texture); glDeleteTextures(1, &heightMap);
         glfwDestroyWindow(window); glfwTerminate(); return 1;
     }
@@ -76,6 +78,8 @@ int main(int argc, char* argv[]) {
     castle.build();
     grand_hall::Hall hall;
     hall.build();
+    royal_garden::Garden garden;
+    garden.build();
     for (GLuint program : {stoneProgram,hallProgram}) {
         glUseProgram(program);
         glUniform1i(glGetUniformLocation(program,"stoneTexture"),0);
@@ -83,15 +87,16 @@ int main(int argc, char* argv[]) {
     }
 
     bool insideHall=true, showForeground=false, overview=false;
+    bool inGarden=false; // Garden scene. F3 is a temporary event until integration.
     bool parallaxOn = true;// P: the headline technique on/off, for comparing
     bool wasC=false, wasO=false, wasP=false;
     float knightX=-6.0f, cameraX=0.0f, distance=84.0f, lookHeight=24.0f;
     float previousTime=static_cast<float>(glfwGetTime());
     int renderedFrames=0, exitCode=0;
-    std::cout << "F1 exterior | F2 hall | A/D walk | Shift faster | W/S zoom\n"
+    std::cout << "F1 exterior | F2 hall | F3 garden | A/D walk | Shift faster | W/S zoom\n"
                  "Up/Down look | C full hall / cutaway | O overview | P parallax | Home reset | Esc quit\n";;
     const char* captures[]={"hall-centre.ppm","hall-overview.ppm","hall-entrance.ppm",
-                            "hall-throne.ppm","hall-full-row.ppm","exterior.ppm"};
+                            "hall-throne.ppm","hall-full-row.ppm","exterior.ppm","garden.ppm"};
     while (!glfwWindowShouldClose(window)) {
         const float time=static_cast<float>(glfwGetTime());
         const float dt=std::min(time-previousTime,0.05f);
@@ -99,11 +104,14 @@ int main(int argc, char* argv[]) {
         glfwPollEvents();
         auto pressed=[&](int key) { return glfwGetKey(window,key)==GLFW_PRESS; };
         if (pressed(GLFW_KEY_ESCAPE)) glfwSetWindowShouldClose(window,true);
-        if (pressed(GLFW_KEY_F1) && insideHall) {
-            insideHall=false; overview=false; cameraX=0; distance=14; lookHeight=3.5f;
+        if (pressed(GLFW_KEY_F1) && (insideHall || inGarden)) {
+            insideHall=false; inGarden=false; overview=false; cameraX=0; distance=14; lookHeight=3.5f;
         }
         if (pressed(GLFW_KEY_F2) && !insideHall) {
-            insideHall=true; cameraX=knightX; distance=84; lookHeight=24;
+            insideHall=true; inGarden=false; cameraX=knightX; distance=84; lookHeight=24;
+        }
+        if (pressed(GLFW_KEY_F3) && !inGarden) {
+            insideHall=false; inGarden=true; overview=false; cameraX=0; distance=22; lookHeight=2.5f;
         }
         if (pressed(GLFW_KEY_C) && !wasC) showForeground=!showForeground;
         if (pressed(GLFW_KEY_O) && !wasO && insideHall) {
@@ -125,24 +133,34 @@ int main(int argc, char* argv[]) {
                                -105.0f,87.0f);
             const float targetX=overview ? 0.0f : std::clamp(knightX,-78.0f,78.0f);
             cameraX+=(targetX-cameraX)*(1.0f-std::exp(-5.0f*dt));
+        } else if (inGarden) {
+            cameraX=std::clamp(cameraX+direction*(pressed(GLFW_KEY_LEFT_SHIFT)?18.0f:8.0f)*dt,
+                               royal_garden::layout::startX+5.0f,royal_garden::layout::endX-5.0f);
         } else cameraX=std::clamp(cameraX+direction*3.0f*dt,-11.0f,11.0f);
-        distance+=(float(pressed(GLFW_KEY_S))-float(pressed(GLFW_KEY_W)))*dt*(insideHall?28.0f:4.0f);
+        distance+=(float(pressed(GLFW_KEY_S))-float(pressed(GLFW_KEY_W)))*dt*(insideHall?28.0f:inGarden?12.0f:4.0f);
         lookHeight+=(float(pressed(GLFW_KEY_UP))-float(pressed(GLFW_KEY_DOWN)))*dt*(insideHall?12.0f:6.0f);
-        distance=insideHall?std::clamp(distance,24.0f,160.0f):std::clamp(distance,6.0f,18.0f);
-        lookHeight=insideHall?std::clamp(lookHeight,0.0f,52.0f):std::clamp(lookHeight,-5.0f,25.0f);
+        if (inGarden) {
+            distance=std::clamp(distance,8.0f,60.0f);
+            lookHeight=std::clamp(lookHeight,0.0f,20.0f);
+        } else {
+            distance=insideHall?std::clamp(distance,24.0f,160.0f):std::clamp(distance,6.0f,18.0f);
+            lookHeight=insideHall?std::clamp(lookHeight,0.0f,52.0f):std::clamp(lookHeight,-5.0f,25.0f);
+        }
 
         // Deterministic views cover both scenes and the foreground toggle.
         if (smokeTest) {
-            insideHall=true; cameraX=0; knightX=-6; distance=84; lookHeight=24; showForeground=false;
+            insideHall=true; inGarden=false; cameraX=0; knightX=-6; distance=84; lookHeight=24; showForeground=false;
             if (capture) {
                 if (renderedFrames==1) { distance=154; lookHeight=26; }
                 if (renderedFrames==2) { cameraX=-89; knightX=-98; distance=40; lookHeight=10; }
                 if (renderedFrames==3) { cameraX=88; knightX=85; distance=42; lookHeight=12; }
                 if (renderedFrames==4) showForeground=true;
                 if (renderedFrames==5) { insideHall=false; distance=14; lookHeight=3.5f; }
+                if (renderedFrames==6) { insideHall=false; inGarden=true; distance=22; lookHeight=2.5f; }
             } else {
                 if (renderedFrames==1) showForeground=true;
                 if (renderedFrames==2) { insideHall=false; distance=14; lookHeight=3.5f; }
+                if (renderedFrames==3) { insideHall=false; inGarden=true; distance=22; lookHeight=2.5f; }
             }
         }
 
@@ -153,10 +171,11 @@ int main(int argc, char* argv[]) {
         glViewport(0,0,width,height);
         glClearColor(0.025f,0.042f,0.072f,1.0f);
         glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-        const glm::vec3 cameraPos(cameraX,insideHall?lookHeight+12.0f:4.0f,distance);
+        const float cameraY=insideHall?lookHeight+12.0f:inGarden?lookHeight+4.0f:4.0f;
+        const glm::vec3 cameraPos(cameraX,cameraY,distance);
         const glm::mat4 view=glm::lookAt(cameraPos,glm::vec3(cameraX,lookHeight,0),glm::vec3(0,1,0));
         const glm::mat4 projection=glm::perspective(glm::radians(50.0f),float(width)/height,0.1f,500.0f);
-        const GLuint program=insideHall?hallProgram:stoneProgram;
+        const GLuint program=insideHall?hallProgram:inGarden?gardenProgram:stoneProgram;
         glUseProgram(program);
         setMatrix(program,"model",glm::mat4(1));
         setMatrix(program,"view",view);
@@ -182,7 +201,8 @@ int main(int argc, char* argv[]) {
             hall.lightShafts.draw();
             glDepthMask(GL_TRUE);
             glDisable(GL_BLEND);
-        } else castle.draw();
+        } else if (inGarden) garden.draw();
+        else castle.draw();
         if (capture && !captureFrame(captureDir/captures[renderedFrames],width,height)) {
             std::cerr << "Could not save capture.\n"; exitCode=1; break;
         }
@@ -192,16 +212,16 @@ int main(int argc, char* argv[]) {
             if (error!=GL_NO_ERROR) {
                 std::cerr << "OpenGL smoke test failed: " << error << '\n'; exitCode=1; break;
             }
-            if (++renderedFrames==(capture?6:3)) {
+            if (++renderedFrames==(capture?7:4)) {
                 std::cout << "Smoke test passed: " << renderedFrames << " frames rendered.\n";
                 break;
             }
         }
     }
-    hall.destroy(); castle.destroy();
+    hall.destroy(); castle.destroy(); garden.destroy();
     glDeleteTextures(1,&texture);
     glDeleteTextures(1, &heightMap);
-    glDeleteProgram(hallProgram); glDeleteProgram(stoneProgram);
+    glDeleteProgram(hallProgram); glDeleteProgram(stoneProgram); glDeleteProgram(gardenProgram);
     glfwDestroyWindow(window); glfwTerminate();
     return exitCode;
 }
