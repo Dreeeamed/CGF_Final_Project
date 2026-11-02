@@ -5,6 +5,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -87,18 +88,28 @@ int main(int argc, char* argv[]) {
     bool insideHall=true, showForeground=false, overview=false;
     bool parallaxOn = true;// P: the headline technique on/off, for comparing
     bool wasC=false, wasO=false, wasP=false;
+    // Q cycles the POM quality: how many layers the ray march and the shadow walk may use.
+    struct Quality { const char* name; float minLayers, maxLayers; int shadowSteps; };
+    const Quality qualities[] = { {"Low", 8.0f, 24.0f, 8}, {"Medium", 12.0f, 48.0f, 16},
+                                 {"High", 24.0f, 96.0f, 32} };
+    int quality = 1;
+    bool vsync = !smokeTest, wasQ = false, wasV = false;
+    int fpsFrames = 0;
+    float fpsTime = 0.0f;
     float knightX=-6.0f, cameraX=0.0f, distance=84.0f, lookHeight=24.0f;
     float previousTime=static_cast<float>(glfwGetTime());
     int renderedFrames=0, exitCode=0;
 	float lightYaw = glm::radians(60.0f), lightPitch = glm::radians(25.0f);
     std::cout << "F1 exterior | F2 hall | A/D walk | Shift faster | W/S zoom\n"
         "Up/Down look | C full hall / cutaway | O overview | P parallax | Home reset | Esc quit\n"
-        "J/L turn the light | I/K raise / lower the light\n";
+        "J/L turn the light | I/K raise / lower the light\n"
+        "Q quality (Low / Medium / High) | V VSync on / off\n";
     const char* captures[]={"hall-centre.ppm","hall-overview.ppm","hall-entrance.ppm",
                             "hall-throne.ppm","hall-full-row.ppm","exterior.ppm"};
     while (!glfwWindowShouldClose(window)) {
         const float time=static_cast<float>(glfwGetTime());
         const float dt=std::min(time-previousTime,0.05f);
+        const float frameTime = time - previousTime;
         previousTime=time;
         glfwPollEvents();
         auto pressed=[&](int key) { return glfwGetKey(window,key)==GLFW_PRESS; };
@@ -122,7 +133,32 @@ int main(int argc, char* argv[]) {
         lightYaw += (float(pressed(GLFW_KEY_L)) - float(pressed(GLFW_KEY_J))) * dt * 1.2f;
 		lightPitch = std::clamp(lightPitch + (float(pressed(GLFW_KEY_I)) - float(pressed(GLFW_KEY_K))) * dt * 0.8f, 0.05f, 1.5f);
         const glm::vec3 lightDir(std::cos(lightPitch) * std::sin(lightYaw), std::sin(lightPitch),std::cos(lightPitch) * std::cos(lightYaw));
+        if (pressed(GLFW_KEY_Q) && !wasQ) {
+            quality = (quality + 1) % 3;
+            const Quality& q = qualities[quality];
+            std::cout << "Quality " << q.name << ": " << q.minLayers << "-" << q.maxLayers
+                << " layers, " << q.shadowSteps << " shadow steps\n";
+        }
+        if (pressed(GLFW_KEY_V) && !wasV) {
+            vsync = !vsync;
+            glfwSwapInterval(vsync ? 1 : 0);
+            std::cout << "VSync " << (vsync ? "ON" : "OFF") << '\n';
+        }
         wasC = pressed(GLFW_KEY_C); wasO = pressed(GLFW_KEY_O); wasP = pressed(GLFW_KEY_P);
+        wasQ = pressed(GLFW_KEY_Q); wasV = pressed(GLFW_KEY_V);
+        // Twice a second: show the frame rate and the toggles in the window title.
+        fpsFrames++;
+        fpsTime += frameTime;
+        if (fpsTime >= 0.5f) {
+            const float fps = fpsFrames / fpsTime;
+            char title[160];
+            std::snprintf(title, sizeof(title), "Castle - %.0f FPS (%.1f ms) | POM %s | Quality %s | VSync %s",
+                fps, 1000.0f / fps, parallaxOn ? "ON" : "OFF", qualities[quality].name,
+                vsync ? "on" : "off");
+            glfwSetWindowTitle(window, title);
+            fpsFrames = 0;
+            fpsTime = 0.0f;
+        }
         if (pressed(GLFW_KEY_HOME) && insideHall) {
             overview=false; showForeground=false; distance=84; lookHeight=24;
         }
@@ -173,6 +209,9 @@ int main(int argc, char* argv[]) {
         glUniform3f(glGetUniformLocation(program,"lightPos"),-8,12,6);
         glUniform1f(glGetUniformLocation(program,"time"),smokeTest?0.0f:time);
         glUniform1i(glGetUniformLocation(program, "parallaxOn"), parallaxOn);
+        glUniform2f(glGetUniformLocation(program, "pomLayers"), qualities[quality].minLayers,
+            qualities[quality].maxLayers);
+        glUniform1i(glGetUniformLocation(program, "shadowSteps"), qualities[quality].shadowSteps);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D,texture);
         glActiveTexture(GL_TEXTURE1);

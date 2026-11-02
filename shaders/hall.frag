@@ -11,6 +11,8 @@ uniform sampler2D heightMap;
 uniform bool parallaxOn;
 uniform sampler2D normalMap;
 uniform vec3 lightDir;
+uniform vec2 pomLayers;   // x: layers when looking straight at the wall, y: when looking along it
+uniform int shadowSteps;  // steps of the walk towards the light
 
 // One copy of the wall texture covers 4 x 4 metres.
 const float wallTileSize = 4.0;
@@ -38,7 +40,7 @@ float depthAt(vec2 uv, vec2 dx, vec2 dy){
 }
 
 vec2 parallaxUV(vec2 uv, vec3 viewTS, vec2 dx, vec2 dy){
-    float layers = mix(48.0,12.0,viewTS.z);
+    float layers = mix(pomLayers.y, pomLayers.x, viewTS.z);
     float layerDepth = 1.0/layers;
 
     vec2 deltaUV = viewTS.xy / max(viewTS.z,0.2) * heightScale / layers;
@@ -47,7 +49,7 @@ vec2 parallaxUV(vec2 uv, vec3 viewTS, vec2 dx, vec2 dy){
     float surfaceDepth = depthAt(uv , dx, dy);
     vec2 previousUV = uv;
     float gapBefore = surfaceDepth;
-    for (int i = 0; i<64 && rayDepth < surfaceDepth; i++){
+    for (int i = 0; i<128 && rayDepth < surfaceDepth; i++){
         previousUV = uv;
         gapBefore = surfaceDepth - rayDepth;
         uv-=deltaUV;
@@ -66,7 +68,7 @@ vec2 parallaxUV(vec2 uv, vec3 viewTS, vec2 dx, vec2 dy){
 const float shadowStrength = 8.0;
 float parallaxShadow(vec2 uv, float hitDepth, vec3 lightTS, vec2 dx, vec2 dy){
     if (lightTS.z <= 0.0) return 0.0;   // свет не падает на стену с этой стороны, значит в тени
-    const int steps = 16;
+    int steps = shadowSteps;
     float layerDepth = hitDepth / float(steps);
     vec2 deltaUV = lightTS.xy / max(lightTS.z, 0.1) * heightScale * layerDepth;
     float rayDepth = hitDepth;
@@ -121,8 +123,6 @@ void main() {
         vec3 L = normalize(lightDir);
         vec3 lightTS = vec3(dot(L, T), dot(L, B), dot(L, n));
         if (parallaxOn) wallShadow = parallaxShadow(pomUV, depthAt(pomUV, dx, dy), lightTS, dx, dy);
-        FragColor = vec4(vec3(wallShadow), 1.0);
-        return;
         // POM step 6: colour and bumps of the stone at the point the eye really sees.
         wallColour = textureGrad(stoneTexture, pomUV, dx, dy).rgb;
         vec3 bump = textureGrad(normalMap, pomUV, dx, dy).rgb * 2.0 - 1.0;
