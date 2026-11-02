@@ -67,9 +67,10 @@ int main(int argc, char* argv[]) {
     GLuint hallProgram=createShaderProgram("shaders/hall.vert","shaders/hall.frag");
     GLuint texture = loadTexture2D("assets/textures/stone_wall/albedo.png");
     GLuint heightMap = loadTexture2D("assets/textures/stone_wall/height.png");
-    if (!stoneProgram || !hallProgram || !texture || !heightMap) {
+	GLuint normalMap = loadTexture2D("assets/textures/stone_wall/normal.png");
+    if (!stoneProgram || !hallProgram || !texture || !heightMap || !normalMap) {
         glDeleteProgram(stoneProgram); glDeleteProgram(hallProgram);
-        glDeleteTextures(1, &texture); glDeleteTextures(1, &heightMap);
+        glDeleteTextures(1, &texture); glDeleteTextures(1, &heightMap); glDeleteTextures(1, &normalMap);
         glfwDestroyWindow(window); glfwTerminate(); return 1;
     }
     CastleGeometry castle;
@@ -80,6 +81,7 @@ int main(int argc, char* argv[]) {
         glUseProgram(program);
         glUniform1i(glGetUniformLocation(program,"stoneTexture"),0);
         glUniform1i(glGetUniformLocation(program, "heightMap"), 1);
+        glUniform1i(glGetUniformLocation(program, "normalMap"), 2);
     }
 
     bool insideHall=true, showForeground=false, overview=false;
@@ -88,8 +90,10 @@ int main(int argc, char* argv[]) {
     float knightX=-6.0f, cameraX=0.0f, distance=84.0f, lookHeight=24.0f;
     float previousTime=static_cast<float>(glfwGetTime());
     int renderedFrames=0, exitCode=0;
+	float lightYaw = glm::radians(60.0f), lightPitch = glm::radians(25.0f);
     std::cout << "F1 exterior | F2 hall | A/D walk | Shift faster | W/S zoom\n"
-                 "Up/Down look | C full hall / cutaway | O overview | P parallax | Home reset | Esc quit\n";;
+        "Up/Down look | C full hall / cutaway | O overview | P parallax | Home reset | Esc quit\n"
+        "J/L turn the light | I/K raise / lower the light\n";
     const char* captures[]={"hall-centre.ppm","hall-overview.ppm","hall-entrance.ppm",
                             "hall-throne.ppm","hall-full-row.ppm","exterior.ppm"};
     while (!glfwWindowShouldClose(window)) {
@@ -115,6 +119,9 @@ int main(int argc, char* argv[]) {
 		    parallaxOn = !parallaxOn;
             std::cout << "Parallax " << (parallaxOn ? "ON" : "OFF") << '\n';
         }
+        lightYaw += (float(pressed(GLFW_KEY_L)) - float(pressed(GLFW_KEY_J))) * dt * 1.2f;
+		lightPitch = std::clamp(lightPitch + (float(pressed(GLFW_KEY_I)) - float(pressed(GLFW_KEY_K))) * dt * 0.8f, 0.05f, 1.5f);
+        const glm::vec3 lightDir(std::cos(lightPitch) * std::sin(lightYaw), std::sin(lightPitch),std::cos(lightPitch) * std::cos(lightYaw));
         wasC = pressed(GLFW_KEY_C); wasO = pressed(GLFW_KEY_O); wasP = pressed(GLFW_KEY_P);
         if (pressed(GLFW_KEY_HOME) && insideHall) {
             overview=false; showForeground=false; distance=84; lookHeight=24;
@@ -161,6 +168,7 @@ int main(int argc, char* argv[]) {
         setMatrix(program,"model",glm::mat4(1));
         setMatrix(program,"view",view);
         setMatrix(program,"projection",projection);
+        glUniform3fv(glGetUniformLocation(program, "lightDir"), 1, glm::value_ptr(lightDir));
         glUniform3fv(glGetUniformLocation(program,"cameraPos"),1,glm::value_ptr(cameraPos));
         glUniform3f(glGetUniformLocation(program,"lightPos"),-8,12,6);
         glUniform1f(glGetUniformLocation(program,"time"),smokeTest?0.0f:time);
@@ -169,6 +177,8 @@ int main(int argc, char* argv[]) {
         glBindTexture(GL_TEXTURE_2D,texture);
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, heightMap);
+        glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_2D, normalMap);
         glActiveTexture(GL_TEXTURE0);
         if (insideHall) {
             hall.architecture.draw();
@@ -201,6 +211,7 @@ int main(int argc, char* argv[]) {
     hall.destroy(); castle.destroy();
     glDeleteTextures(1,&texture);
     glDeleteTextures(1, &heightMap);
+    glDeleteTextures(1, &normalMap);
     glDeleteProgram(hallProgram); glDeleteProgram(stoneProgram);
     glfwDestroyWindow(window); glfwTerminate();
     return exitCode;

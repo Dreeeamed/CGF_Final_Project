@@ -9,6 +9,8 @@ uniform vec3 cameraPos;
 uniform float time;
 uniform sampler2D heightMap;
 uniform bool parallaxOn;
+uniform sampler2D normalMap;
+uniform vec3 lightDir;
 
 // One copy of the wall texture covers 4 x 4 metres.
 const float wallTileSize = 4.0;
@@ -39,16 +41,12 @@ vec2 parallaxUV(vec2 uv, vec3 viewTS, vec2 dx, vec2 dy){
     float layers = mix(48.0,12.0,viewTS.z);
     float layerDepth = 1.0/layers;
 
-    vec2 deltaUV = viewTS.xy/max(viewTS.z,0.2) * heightScale / layers;
-
-    float rayDepth = 1.0/layers;
-
     vec2 deltaUV = viewTS.xy / max(viewTS.z,0.2) * heightScale / layers;
 
     float rayDepth = 0.0;
     float surfaceDepth = depthAt(uv , dx, dy);
     vec2 previousUV = uv;
-    gapBefore = surfaceDepth;
+    float gapBefore = surfaceDepth;
     for (int i = 0; i<64 && rayDepth < surfaceDepth; i++){
         previousUV = uv;
         gapBefore = surfaceDepth - rayDepth;
@@ -90,6 +88,7 @@ void main() {
     }
     vec3 n = normalize(Normal);
     if (dot(n,cameraPos-FragPos)<0.0) n=-n;
+        vec3 wallColour = vec3(0.0);
     if (Material == 11) {
         // Wall material: parallax occlusion mapping (POM) on the height map.
         vec2 uv;
@@ -99,13 +98,19 @@ void main() {
         vec3 viewTS = vec3(dot(V, T), dot(V, B), dot(V, n));
         vec2 dx = dFdx(uv), dy = dFdy(uv);
         vec2 pomUV = parallaxOn ? parallaxUV(uv, viewTS, dx, dy) : uv;
-        float h = textureGrad(heightMap, pomUV, dx, dy).r;
-        FragColor = vec4(vec3(h), 1.0);
-        return;
+        // POM step 6: colour and bumps of the stone at the point the eye really sees.
+        wallColour = textureGrad(stoneTexture, pomUV, dx, dy).rgb;
+        vec3 bump = textureGrad(normalMap, pomUV, dx, dy).rgb * 2.0 - 1.0;
+        n = normalize(T * bump.x + B * bump.y + n * bump.z);
+        
     }
     float variation = stoneVariation(FragPos,n);
     vec3 base = vec3(0.31,0.40,0.53)*variation;
     float specularStrength = 0.07;
+    if (Material == 11) {
+        base = wallColour;
+        specularStrength = 0.15;
+    }
     if (Material == 1) {
         // Large quartz-grey slabs, with subtle joints in world metres.
         vec2 q = FragPos.xz/3.0;
@@ -156,7 +161,7 @@ void main() {
         base = vec3(0.72,0.79,0.83);
         specularStrength = 0.45;
     }
-    vec3 keyDir = normalize(vec3(-0.65,0.85,0.6));
+    vec3 keyDir = normalize(lightDir);
     vec3 viewDir = normalize(cameraPos-FragPos);
     float diffuse = max(dot(n,keyDir),0.0);
     float rim = pow(1.0-max(dot(n,viewDir),0.0),3.0)*0.10;
