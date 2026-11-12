@@ -75,6 +75,28 @@ const Quality qualities[] = {
     {"High",   24.0f, 96.0f, 32},
 };
 
+// Lesson 12: what the knight can do right here, shown at the bottom of the screen.
+std::string questHint(bool nearKey, bool nearGate, bool hasKey, float gateLift, bool inGarden) {
+    if (inGarden) return "You are in the inner garden.   E - back to the hall";
+    if (nearKey) return "A golden key at the foot of the throne.   E - take it";
+    if (nearGate) {
+        if (!hasKey) return "The gate is locked. The key lies at the foot of the throne.";
+        if (gateLift == 0.0f) return "E - open the gate with the key";
+        if (gateLift < 1.0f) return "The gate is rising...";
+        return "E - enter the inner garden";
+    }
+    return "";
+}
+
+// Lesson 11: the free-fly camera looks along this direction.
+// yaw turns left / right, pitch looks up / down (radians).
+// yaw = 0, pitch = 0 looks along -Z: from the camera side into the hall.
+glm::vec3 directionFromAngles(float yaw, float pitch) {
+    return glm::vec3(std::cos(pitch) * std::sin(yaw),
+                     std::sin(pitch),
+                     -std::cos(pitch) * std::cos(yaw));
+}
+
 // ---------------------------------------------------------------------------
 // Texts
 // ---------------------------------------------------------------------------
@@ -85,16 +107,18 @@ const char* consoleHelp =
     "J/L turn the light | I/K raise / lower the light\n"
     "Q quality (Low / Medium / High) | V VSync on / off\n"
     "H help on screen | Space pause | B back faces (culling off, back sides red)\n"
-    "Tab free camera: W/S/A/D fly, R/F up / down, arrows or right mouse look, Shift faster\n";
+    "Tab free camera: W/S/A/D fly, R/F up / down, arrows or right mouse look, Shift faster\n"
+    "E take the key / open the gate / enter the garden\n";
 
 // The on-screen help is two columns, because the font is not monospaced:
 // line N of `helpKeys` belongs to line N of `helpActions`.
 const char* helpKeys =
     "A / D\nShift\nW / S\nUp / Down\nO\nC\nHome\nF1 / F2\n"
-    "P\nQ\nJ / L\nI / K\nSpace\nB\nTab\nV\nH\nEsc";
+    "E\nP\nQ\nJ / L\nI / K\nSpace\nB\nTab\nV\nH\nEsc";
 const char* helpActions =
     "walk left / right\nwalk faster\nzoom in / out\nlook higher / lower\n"
     "overview of the hall\nfull hall / cutaway\nreset the camera\nexterior / hall\n"
+    "take the key / open the gate / enter the garden\n"
     "parallax occlusion on / off\nPOM quality: Low / Medium / High\nturn the light\n"
     "raise / lower the light\npause animation\nback-face culling on / off\n"
     "free camera: WASD fly, R / F up / down, arrows or right mouse look\n"
@@ -109,24 +133,26 @@ std::string titleText(float fps, bool parallaxOn, const Quality& quality, bool v
 }
 
 // Top-left panel: topic, team, switches and frame rate.
-std::string infoText(bool parallaxOn, const Quality& quality, bool vsync, bool paused, bool freeCamera, bool hasKey, float fps) {
+std::string infoText(bool parallaxOn, const Quality& quality, bool vsync, bool paused,
+                     bool freeCamera, bool hasKey, float fps) {
     char status[160];
     std::snprintf(status, sizeof(status),
-                  "POM: %s   Quality: %s   VSync: %s%s%s\n%.0f FPS (%.1f ms) Key: %s   H - help",
+                  "POM: %s   Quality: %s   VSync: %s%s%s\n%.0f FPS (%.1f ms)   Key: %s   H - help",
                   parallaxOn ? "ON" : "OFF", quality.name, vsync ? "on" : "off",
-                  paused ? "   PAUSED" : "",freeCamera ? "   FREE CAMERA" : "", fps, fps > 0.0f ? 1000.0f / fps : 0.0f,
-                  hasKey ? "found" : "not found");
+                  paused ? "   PAUSED" : "", freeCamera ? "   FREE CAMERA" : "",
+                  fps, fps > 0.0f ? 1000.0f / fps : 0.0f, hasKey ? "found" : "not found");
     return std::string("Topic 15: 2.5D castle with parallax occlusion on walls\n")
          + "Akezhan Muzamelov, Bolatbek Bolat, Adil Dyussenov\n" + status;
 }
 
 // Lesson 9: text over the picture - who we are, what is switched on, how to play.
-void drawHud(Hud& hud, int width, int height, const std::string& info, bool showHelp, bool culling) {
+void drawHud(Hud& hud, int width, int height, const std::string& info, bool showHelp, bool culling,
+             const std::string& hint) {
     const glm::vec4 panel(0.02f, 0.03f, 0.05f, 0.65f);
     const glm::vec4 parchment(0.93f, 0.86f, 0.70f, 1.0f);
     const glm::vec4 gold(1.0f, 0.70f, 0.28f, 1.0f);
     const glm::vec4 warning(1.0f, 0.35f, 0.3f, 1.0f);
-    const std::string& hint;
+
     hud.begin(width, height);
     hud.rect(16, 16, hud.width(info) + 32, hud.height(info) + 24, panel);
     hud.text(32, 28, info, parchment);
@@ -151,26 +177,6 @@ void drawHud(Hud& hud, int width, int height, const std::string& info, bool show
 }
 
 } // namespace
-// Lesson 11: the free-fly camera looks along this direction.
-// yaw turns left / right, pitch looks up / down (radians).
-// yaw = 0, pitch = 0 looks along -Z: from the camera side into the hall.
-// Lesson 12: what the knight can do right here, shown at the bottom of the screen.
-std::string questHint(bool nearKey, bool nearGate, bool hasKey, float gateLift, bool inGarden) {
-    if (inGarden) return "You are in the inner garden.   E - back to the hall";
-    if (nearKey) return "A golden key at the foot of the throne.   E - take it";
-    if (nearGate) {
-        if (!hasKey) return "The gate is locked. The key lies at the foot of the throne.";
-        if (gateLift == 0.0f) return "E - open the gate with the key";
-        if (gateLift < 1.0f) return "The gate is rising...";
-        return "E - enter the inner garden";
-    }
-    return "";
-}
-glm::vec3 directionFromAngles(float yaw, float pitch) {
-    return glm::vec3(std::cos(pitch) * std::sin(yaw),
-        std::sin(pitch),
-        -std::cos(pitch) * std::cos(yaw));
-}
 
 int main(int argc, char* argv[]) {
     // -----------------------------------------------------------------------
@@ -253,20 +259,6 @@ int main(int argc, char* argv[]) {
     float cameraX = -78.0f;       // the camera follows him smoothly
     float distance = 40.0f;       // how far the camera is from the centre line
     float lookHeight = 10.0f;     // the height the camera looks at
-    // Lesson 12, the quest: take the key at the throne, open the gate, enter the garden.
-    const float keyX = 80.0f;     // the key floats at the foot of the throne
-    const float gateX = -100.0f;  // the entrance gate, where the knight starts
-    bool hasKey = false;
-    bool gateOpening = false;     // set once, when the key opens the gate
-    float gateLift = 0.0f;        // 0 = closed, 1 = fully raised
-    bool inGarden = false;        // where the knight wants to be
-    float gardenWalk = 0.0f;      // 0 = on the carpet, 1 = inside the gate
-
-    // Free-fly camera (Tab): its own position and look angles.
-    bool freeCamera = false;
-    glm::vec3 freePos(0.0f);
-    float freeYaw = 0.0f, freePitch = 0.0f;
-    double lastMouseX = 0.0, lastMouseY = 0.0;   // to measure how far the mouse moved
 
     // Switches.
     bool parallaxOn = true;       // P: the headline technique on / off, for comparing
@@ -275,6 +267,21 @@ int main(int argc, char* argv[]) {
     bool showHelp = false;        // H
     bool paused = false;          // Space
     bool culling = true;          // B
+
+    // Free-fly camera (Tab): its own position and look angles.
+    bool freeCamera = false;
+    glm::vec3 freePos(0.0f);
+    float freeYaw = 0.0f, freePitch = 0.0f;
+    double lastMouseX = 0.0, lastMouseY = 0.0;   // to measure how far the mouse moved
+
+    // Lesson 12, the quest: take the key at the throne, open the gate, enter the garden.
+    const float keyX = 80.0f;     // the key floats at the foot of the throne
+    const float gateX = -100.0f;  // the entrance gate, where the knight starts
+    bool hasKey = false;
+    bool gateOpening = false;     // set once, when the key opens the gate
+    float gateLift = 0.0f;        // 0 = closed, 1 = fully raised
+    bool inGarden = false;        // where the knight wants to be
+    float gardenWalk = 0.0f;      // 0 = on the carpet, 1 = inside the gate
 
     // The light: yaw turns it around the hall, pitch raises it (radians).
     float lightYaw = glm::radians(60.0f);
@@ -290,9 +297,11 @@ int main(int argc, char* argv[]) {
     int exitCode = 0;
 
     KeyPress keyC{GLFW_KEY_C}, keyO{GLFW_KEY_O}, keyP{GLFW_KEY_P}, keyQ{GLFW_KEY_Q},
-             keyV{GLFW_KEY_V}, keyH{GLFW_KEY_H}, keySpace{GLFW_KEY_SPACE}, keyB{GLFW_KEY_B}, keyTab{ GLFW_KEY_TAB };
+             keyV{GLFW_KEY_V}, keyH{GLFW_KEY_H}, keySpace{GLFW_KEY_SPACE}, keyB{GLFW_KEY_B},
+             keyTab{GLFW_KEY_TAB}, keyE{GLFW_KEY_E};
     const char* captures[] = {"hall-centre.ppm", "hall-overview.ppm", "hall-entrance.ppm",
-                              "hall-throne.ppm", "hall-full-row.ppm", "exterior.ppm","hall-closeup.ppm" };
+                              "hall-throne.ppm", "hall-full-row.ppm", "exterior.ppm",
+                              "hall-closeup.ppm", "hall-garden.ppm"};
     std::cout << consoleHelp;
 
     while (!glfwWindowShouldClose(window)) {
@@ -307,7 +316,7 @@ int main(int argc, char* argv[]) {
         // ---- 2. Keys that switch something --------------------------------
         if (pressed(GLFW_KEY_ESCAPE)) glfwSetWindowShouldClose(window, true);
         if (pressed(GLFW_KEY_F1) && insideHall) {
-            insideHall = false; overview = false;freeCamera = false;
+            insideHall = false; overview = false; freeCamera = false;
             cameraX = 0; distance = 14; lookHeight = 3.5f;
         }
         if (pressed(GLFW_KEY_F2) && !insideHall) {
@@ -328,7 +337,7 @@ int main(int argc, char* argv[]) {
             quality = (quality + 1) % 3;
             const Quality& q = qualities[quality];
             std::cout << "Quality " << q.name << ": " << q.minLayers << "-" << q.maxLayers
-                << " layers, " << q.shadowSteps << " shadow steps\n";
+                      << " layers, " << q.shadowSteps << " shadow steps\n";
         }
         if (keyV.justPressed(window)) {
             vsync = !vsync;
@@ -337,10 +346,6 @@ int main(int argc, char* argv[]) {
         }
         if (keyH.justPressed(window)) showHelp = !showHelp;
         if (keySpace.justPressed(window)) paused = !paused;
-        if (keyB.justPressed(window)) {
-            culling = !culling;
-            if (culling) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
-        }
         if (keyTab.justPressed(window) && insideHall) {
             freeCamera = !freeCamera;
             if (freeCamera) {
@@ -351,6 +356,10 @@ int main(int argc, char* argv[]) {
                 freePitch = std::asin(look.y);
                 glfwGetCursorPos(window, &lastMouseX, &lastMouseY);
             }
+        }
+        if (keyB.justPressed(window)) {
+            culling = !culling;
+            if (culling) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
         }
         if (pressed(GLFW_KEY_HOME) && insideHall) {
             overview = false; showForeground = false;
@@ -365,8 +374,8 @@ int main(int argc, char* argv[]) {
         lightPitch = std::clamp(lightPitch, 0.05f, 1.5f);
         // Angles -> direction (spherical coordinates): towards the light.
         const glm::vec3 lightDir(std::cos(lightPitch) * std::sin(lightYaw),
-            std::sin(lightPitch),
-            std::cos(lightPitch) * std::cos(lightYaw));
+                                 std::sin(lightPitch),
+                                 std::cos(lightPitch) * std::cos(lightYaw));
 
         // ---- 4. Frame rate in the window title, twice a second -------------
         fpsFrames++;
@@ -399,13 +408,13 @@ int main(int argc, char* argv[]) {
             const glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0, 1, 0)));
             const float ahead = float(pressed(GLFW_KEY_W)) - float(pressed(GLFW_KEY_S));
             const float rise = float(pressed(GLFW_KEY_R)) - float(pressed(GLFW_KEY_F));
-            float speed = pressed(GLFW_KEY_LEFT_SHIFT) ? 18.0f : 7.0f;
-            if (gardenWalk > 0.0f) speed = 0.0f;   // walking through the gate: A/D do nothing
+            const float speed = pressed(GLFW_KEY_LEFT_SHIFT) ? 30.0f : 10.0f;
             freePos += (forward * ahead + right * direction + glm::vec3(0, rise, 0)) * speed * dt;
             // Stay inside the hall: the walls have no outer side to look at.
             freePos = glm::clamp(freePos, glm::vec3(-106, 1, -18), glm::vec3(106, 58, 18));
-        }else if (insideHall) {
-            const float speed = pressed(GLFW_KEY_LEFT_SHIFT) ? 18.0f : 7.0f;
+        } else if (insideHall) {
+            float speed = pressed(GLFW_KEY_LEFT_SHIFT) ? 18.0f : 7.0f;
+            if (gardenWalk > 0.0f) speed = 0.0f;   // walking through the gate: A/D do nothing
             knightX = std::clamp(knightX + direction * speed * dt, -105.0f, 87.0f);
             // The camera does not jump to the knight; every frame it closes part of the gap.
             const float targetX = overview ? 0.0f : std::clamp(knightX, -78.0f, 78.0f);
@@ -437,7 +446,7 @@ int main(int argc, char* argv[]) {
                     freePos = glm::vec3(-101.0f, 5.0f, 6.0f);
                     freeYaw = -0.9f;
                     freePitch = -0.12f;
-				}
+                }
                 if (renderedFrames == 7) {   // the end of the quest: open gate, knight walking in
                     cameraX = -92; knightX = -100; distance = 30; lookHeight = 6;
                     hasKey = true; gateLift = 1.0f; inGarden = true; gardenWalk = 0.6f;
@@ -447,6 +456,7 @@ int main(int argc, char* argv[]) {
                 if (renderedFrames == 2) { insideHall = false; distance = 14; lookHeight = 3.5f; }
             }
         }
+
         // ---- 5b. The quest ---------------------------------------------------
         const bool nearKey = !hasKey && std::abs(knightX - keyX) < 3.0f;
         const bool nearGate = std::abs(knightX - gateX) < 5.0f;
@@ -461,6 +471,7 @@ int main(int argc, char* argv[]) {
             const float walkTarget = inGarden ? 1.0f : 0.0f;
             gardenWalk += std::clamp(walkTarget - gardenWalk, -dt / 2.0f, dt / 2.0f);
         }
+
         // ---- 6. Draw the scene ---------------------------------------------
         int width, height;
         glfwGetFramebufferSize(window, &width, &height);
@@ -544,9 +555,9 @@ int main(int argc, char* argv[]) {
 
         // ---- 7. Text over the picture --------------------------------------
         const std::string info = infoText(parallaxOn, qualities[quality], vsync, paused, freeCamera,
-            hasKey, shownFps);
+                                          hasKey, shownFps);
         const std::string hint = (insideHall && !freeCamera)
-            ? questHint(nearKey, nearGate, hasKey, gateLift, inGarden) : "";
+                               ? questHint(nearKey, nearGate, hasKey, gateLift, inGarden) : "";
         drawHud(hud, width, height, info, showHelp, culling, hint);
 
         // ---- 8. Show the picture (and check it in the smoke test) ----------
