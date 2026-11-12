@@ -84,18 +84,20 @@ const char* consoleHelp =
     "Up/Down look | C full hall / cutaway | O overview | P parallax | Home reset | Esc quit\n"
     "J/L turn the light | I/K raise / lower the light\n"
     "Q quality (Low / Medium / High) | V VSync on / off\n"
-    "H help on screen | Space pause | B back faces (culling off, back sides red)\n";
+    "H help on screen | Space pause | B back faces (culling off, back sides red)\n"
+    "Tab free camera: W/S/A/D fly, R/F up / down, arrows or right mouse look, Shift faster\n";
 
 // The on-screen help is two columns, because the font is not monospaced:
 // line N of `helpKeys` belongs to line N of `helpActions`.
 const char* helpKeys =
     "A / D\nShift\nW / S\nUp / Down\nO\nC\nHome\nF1 / F2\n"
-    "P\nQ\nJ / L\nI / K\nSpace\nB\nV\nH\nEsc";
+    "P\nQ\nJ / L\nI / K\nSpace\nB\nTab\nV\nH\nEsc";
 const char* helpActions =
     "walk left / right\nwalk faster\nzoom in / out\nlook higher / lower\n"
     "overview of the hall\nfull hall / cutaway\nreset the camera\nexterior / hall\n"
     "parallax occlusion on / off\nPOM quality: Low / Medium / High\nturn the light\n"
     "raise / lower the light\npause animation\nback-face culling on / off\n"
+    "free camera: WASD fly, R / F up / down, arrows or right mouse look\n"
     "VSync on / off\nhide this help\nquit";
 
 // The window title: frame rate and switches, updated twice a second.
@@ -107,12 +109,12 @@ std::string titleText(float fps, bool parallaxOn, const Quality& quality, bool v
 }
 
 // Top-left panel: topic, team, switches and frame rate.
-std::string infoText(bool parallaxOn, const Quality& quality, bool vsync, bool paused, float fps) {
+std::string infoText(bool parallaxOn, const Quality& quality, bool vsync, bool paused, bool freeCamera, float fps) {
     char status[160];
     std::snprintf(status, sizeof(status),
-                  "POM: %s   Quality: %s   VSync: %s%s\n%.0f FPS (%.1f ms)   H - help",
+                  "POM: %s   Quality: %s   VSync: %s%s%s\n%.0f FPS (%.1f ms)   H - help",
                   parallaxOn ? "ON" : "OFF", quality.name, vsync ? "on" : "off",
-                  paused ? "   PAUSED" : "", fps, fps > 0.0f ? 1000.0f / fps : 0.0f);
+                  paused ? "   PAUSED" : "",freeCamera ? "   FREE CAMERA" : "", fps, fps > 0.0f ? 1000.0f / fps : 0.0f);
     return std::string("Topic 15: 2.5D castle with parallax occlusion on walls\n")
          + "Akezhan Muzamelov, Bolatbek Bolat, Adil Dyussenov\n" + status;
 }
@@ -141,6 +143,14 @@ void drawHud(Hud& hud, int width, int height, const std::string& info, bool show
 }
 
 } // namespace
+// Lesson 11: the free-fly camera looks along this direction.
+// yaw turns left / right, pitch looks up / down (radians).
+// yaw = 0, pitch = 0 looks along -Z: from the camera side into the hall.
+glm::vec3 directionFromAngles(float yaw, float pitch) {
+    return glm::vec3(std::cos(pitch) * std::sin(yaw),
+        std::sin(pitch),
+        -std::cos(pitch) * std::cos(yaw));
+}
 
 int main(int argc, char* argv[]) {
     // -----------------------------------------------------------------------
@@ -224,6 +234,12 @@ int main(int argc, char* argv[]) {
     float distance = 40.0f;       // how far the camera is from the centre line
     float lookHeight = 10.0f;     // the height the camera looks at
 
+    // Free-fly camera (Tab): its own position and look angles.
+    bool freeCamera = false;
+    glm::vec3 freePos(0.0f);
+    float freeYaw = 0.0f, freePitch = 0.0f;
+    double lastMouseX = 0.0, lastMouseY = 0.0;   // to measure how far the mouse moved
+
     // Switches.
     bool parallaxOn = true;       // P: the headline technique on / off, for comparing
     int quality = 1;              // Q: index into `qualities`, starts at Medium
@@ -246,9 +262,9 @@ int main(int argc, char* argv[]) {
     int exitCode = 0;
 
     KeyPress keyC{GLFW_KEY_C}, keyO{GLFW_KEY_O}, keyP{GLFW_KEY_P}, keyQ{GLFW_KEY_Q},
-             keyV{GLFW_KEY_V}, keyH{GLFW_KEY_H}, keySpace{GLFW_KEY_SPACE}, keyB{GLFW_KEY_B};
+             keyV{GLFW_KEY_V}, keyH{GLFW_KEY_H}, keySpace{GLFW_KEY_SPACE}, keyB{GLFW_KEY_B}, keyTab{ GLFW_KEY_TAB };
     const char* captures[] = {"hall-centre.ppm", "hall-overview.ppm", "hall-entrance.ppm",
-                              "hall-throne.ppm", "hall-full-row.ppm", "exterior.ppm"};
+                              "hall-throne.ppm", "hall-full-row.ppm", "exterior.ppm","hall-closeup.ppm" };
     std::cout << consoleHelp;
 
     while (!glfwWindowShouldClose(window)) {
@@ -263,7 +279,7 @@ int main(int argc, char* argv[]) {
         // ---- 2. Keys that switch something --------------------------------
         if (pressed(GLFW_KEY_ESCAPE)) glfwSetWindowShouldClose(window, true);
         if (pressed(GLFW_KEY_F1) && insideHall) {
-            insideHall = false; overview = false;
+            insideHall = false; overview = false;freeCamera = false;
             cameraX = 0; distance = 14; lookHeight = 3.5f;
         }
         if (pressed(GLFW_KEY_F2) && !insideHall) {
@@ -284,7 +300,7 @@ int main(int argc, char* argv[]) {
             quality = (quality + 1) % 3;
             const Quality& q = qualities[quality];
             std::cout << "Quality " << q.name << ": " << q.minLayers << "-" << q.maxLayers
-                      << " layers, " << q.shadowSteps << " shadow steps\n";
+                << " layers, " << q.shadowSteps << " shadow steps\n";
         }
         if (keyV.justPressed(window)) {
             vsync = !vsync;
@@ -296,6 +312,17 @@ int main(int argc, char* argv[]) {
         if (keyB.justPressed(window)) {
             culling = !culling;
             if (culling) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+        }
+        if (keyTab.justPressed(window) && insideHall) {
+            freeCamera = !freeCamera;
+            if (freeCamera) {
+                // Start inside the hall, above the 2.5D camera's spot, looking at what it looked at.
+                freePos = glm::vec3(cameraX, lookHeight + 12.0f, 16.0f);
+                const glm::vec3 look = glm::normalize(glm::vec3(cameraX, lookHeight, 0) - freePos);
+                freeYaw = std::atan2(look.x, -look.z);
+                freePitch = std::asin(look.y);
+                glfwGetCursorPos(window, &lastMouseX, &lastMouseY);
+            }
         }
         if (pressed(GLFW_KEY_HOME) && insideHall) {
             overview = false; showForeground = false;
@@ -310,8 +337,8 @@ int main(int argc, char* argv[]) {
         lightPitch = std::clamp(lightPitch, 0.05f, 1.5f);
         // Angles -> direction (spherical coordinates): towards the light.
         const glm::vec3 lightDir(std::cos(lightPitch) * std::sin(lightYaw),
-                                 std::sin(lightPitch),
-                                 std::cos(lightPitch) * std::cos(lightYaw));
+            std::sin(lightPitch),
+            std::cos(lightPitch) * std::cos(lightYaw));
 
         // ---- 4. Frame rate in the window title, twice a second -------------
         fpsFrames++;
@@ -325,7 +352,30 @@ int main(int argc, char* argv[]) {
 
         // ---- 5. Knight and camera -----------------------------------------
         const float direction = float(pressed(GLFW_KEY_D)) - float(pressed(GLFW_KEY_A));
-        if (insideHall) {
+        if (freeCamera) {
+            // Look around: arrow keys, or drag with the right mouse button.
+            double mouseX, mouseY;
+            glfwGetCursorPos(window, &mouseX, &mouseY);
+            if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+                freeYaw += float(mouseX - lastMouseX) * 0.004f;
+                freePitch -= float(mouseY - lastMouseY) * 0.004f;   // screen y goes down
+            }
+            lastMouseX = mouseX;
+            lastMouseY = mouseY;
+            freeYaw += (float(pressed(GLFW_KEY_RIGHT)) - float(pressed(GLFW_KEY_LEFT))) * dt * 1.5f;
+            freePitch += (float(pressed(GLFW_KEY_UP)) - float(pressed(GLFW_KEY_DOWN))) * dt * 1.0f;
+            freePitch = std::clamp(freePitch, -1.5f, 1.5f);   // never straight up: lookAt needs a clear "up"
+
+            // Fly: W/S along the view, A/D sideways, R/F straight up and down.
+            const glm::vec3 forward = directionFromAngles(freeYaw, freePitch);
+            const glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0, 1, 0)));
+            const float ahead = float(pressed(GLFW_KEY_W)) - float(pressed(GLFW_KEY_S));
+            const float rise = float(pressed(GLFW_KEY_R)) - float(pressed(GLFW_KEY_F));
+            const float speed = pressed(GLFW_KEY_LEFT_SHIFT) ? 30.0f : 10.0f;
+            freePos += (forward * ahead + right * direction + glm::vec3(0, rise, 0)) * speed * dt;
+            // Stay inside the hall: the walls have no outer side to look at.
+            freePos = glm::clamp(freePos, glm::vec3(-106, 1, -18), glm::vec3(106, 58, 18));
+        }else if (insideHall) {
             const float speed = pressed(GLFW_KEY_LEFT_SHIFT) ? 18.0f : 7.0f;
             knightX = std::clamp(knightX + direction * speed * dt, -105.0f, 87.0f);
             // The camera does not jump to the knight; every frame it closes part of the gap.
@@ -334,8 +384,9 @@ int main(int argc, char* argv[]) {
         } else {
             cameraX = std::clamp(cameraX + direction * 3.0f * dt, -11.0f, 11.0f);
         }
-        const float zoom = float(pressed(GLFW_KEY_S)) - float(pressed(GLFW_KEY_W));
-        const float tilt = float(pressed(GLFW_KEY_UP)) - float(pressed(GLFW_KEY_DOWN));
+        // In the free camera W/S and the arrows fly and look, so they do not zoom here.
+        const float zoom = freeCamera ? 0.0f : float(pressed(GLFW_KEY_S)) - float(pressed(GLFW_KEY_W));
+        const float tilt = freeCamera ? 0.0f : float(pressed(GLFW_KEY_UP)) - float(pressed(GLFW_KEY_DOWN));
         distance += zoom * dt * (insideHall ? 28.0f : 4.0f);
         lookHeight += tilt * dt * (insideHall ? 12.0f : 6.0f);
         distance = insideHall ? std::clamp(distance, 24.0f, 160.0f) : std::clamp(distance, 6.0f, 18.0f);
@@ -343,7 +394,7 @@ int main(int argc, char* argv[]) {
 
         // Smoke test: fixed views, so the saved images can be compared between versions.
         if (smokeTest) {
-            insideHall = true; showForeground = false;
+            insideHall = true; showForeground = false;freeCamera = false;
             cameraX = 0; knightX = -6; distance = 84; lookHeight = 24;
             if (capture) {
                 if (renderedFrames == 1) { distance = 154; lookHeight = 26; }
@@ -351,6 +402,12 @@ int main(int argc, char* argv[]) {
                 if (renderedFrames == 3) { cameraX = 88; knightX = 85; distance = 42; lookHeight = 12; }
                 if (renderedFrames == 4) showForeground = true;
                 if (renderedFrames == 5) { insideHall = false; distance = 14; lookHeight = 3.5f; }
+                if (renderedFrames == 6) {   // free camera: POM close-up of the left end wall
+                    freeCamera = true;
+                    freePos = glm::vec3(-101.0f, 5.0f, 6.0f);
+                    freeYaw = -0.9f;
+                    freePitch = -0.12f;
+				}
             } else {
                 if (renderedFrames == 1) showForeground = true;
                 if (renderedFrames == 2) { insideHall = false; distance = 14; lookHeight = 3.5f; }
@@ -366,8 +423,12 @@ int main(int argc, char* argv[]) {
         glClearColor(0.025f, 0.042f, 0.072f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        const glm::vec3 cameraPos(cameraX, insideHall ? lookHeight + 12.0f : 4.0f, distance);
-        const glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(cameraX, lookHeight, 0), glm::vec3(0, 1, 0));
+        glm::vec3 cameraPos(cameraX, insideHall ? lookHeight + 12.0f : 4.0f, distance);
+        glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(cameraX, lookHeight, 0), glm::vec3(0, 1, 0));
+        if (freeCamera) {
+            cameraPos = freePos;
+            view = glm::lookAt(freePos, freePos + directionFromAngles(freeYaw, freePitch), glm::vec3(0, 1, 0));
+        }
         const glm::mat4 projection = glm::perspective(glm::radians(50.0f), float(width) / height, 0.1f, 500.0f);
 
         const GLuint program = insideHall ? hallProgram : stoneProgram;
@@ -395,9 +456,10 @@ int main(int argc, char* argv[]) {
 
         if (insideHall) {
             hall.architecture.draw();
-            if (showForeground) {
-                // From outside we look at the back of the near wall's inner skin.
-                glDisable(GL_CULL_FACE);
+            if (showForeground || freeCamera) {
+                // The 2.5D camera looks at the near wall from OUTSIDE, at the back of its
+                // inner skin: show both sides. The free camera is inside: normal culling.
+                if (!freeCamera) glDisable(GL_CULL_FACE);
                 hall.foreground.draw();
                 if (culling) glEnable(GL_CULL_FACE);
             }
@@ -419,7 +481,7 @@ int main(int argc, char* argv[]) {
         }
 
         // ---- 7. Text over the picture --------------------------------------
-        const std::string info = infoText(parallaxOn, qualities[quality], vsync, paused, shownFps);
+        const std::string info = infoText(parallaxOn, qualities[quality], vsync, paused, freeCamera, shownFps);
         drawHud(hud, width, height, info, showHelp, culling);
 
         // ---- 8. Show the picture (and check it in the smoke test) ----------
@@ -432,7 +494,7 @@ int main(int argc, char* argv[]) {
             if (error != GL_NO_ERROR) {
                 std::cerr << "OpenGL smoke test failed: " << error << '\n'; exitCode = 1; break;
             }
-            if (++renderedFrames == (capture ? 6 : 3)) {
+            if (++renderedFrames == (capture ? 7 : 3)) {
                 std::cout << "Smoke test passed: " << renderedFrames << " frames rendered.\n";
                 break;
             }
