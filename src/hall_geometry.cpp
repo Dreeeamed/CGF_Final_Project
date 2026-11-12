@@ -309,21 +309,29 @@ void throne(Vertices& v) {
         cylinder(v, {99.5f, 12, i * 1.2f}, 2.8f - std::abs(i) * 0.7f, 0.45f, 0.015f, Brass, 24);
 }
 
-void gate(Vertices& v) {
-    // Side-composition entrance: the exterior transition will arrive here later.
-    portal(v, -100, 0, 4.5f, 6, 3, -8, -1, 12, Door);
+void gate(Vertices& v, Vertices& grille) {
+    // The entrance gate. Behind it lies the inner garden, painted by the shader (Garden).
+    portal(v, -100, 0, 4.5f, 6, 3, -8, -1, 12, Garden);
     // The gate stands away from the wall: give its deep sides an outer face too.
     for (int half : {-1, 1})
-        box(v, {-100 + half * 4.5f - 0.35f, 0, -14}, {-100 + half * 4.5f + 0.35f, 6, -7.5f});
-    // The grille: nine vertical bars, two cross bars and a middle bar.
+        box(v, { -100 + half * 4.5f - 0.35f, 0, -14 }, { -100 + half * 4.5f + 0.35f, 6, -7.5f });
+    // The grille: nine vertical bars and two cross bars. A separate mesh, so it can rise.
     for (int i = -4; i <= 4; ++i)
-        rod(v, {-100.0f + i, 0, -13.8f}, {-100.0f + i, 6.1f, -13.8f}, 0.06f, Brass);
+        rod(grille, { -100.0f + i, 0, -13.8f }, { -100.0f + i, 6.1f, -13.8f }, 0.06f, Brass);
     for (float y : {1.0f, 4.8f})
-        rod(v, {-104.4f, y, -13.7f}, {-95.6f, y, -13.7f}, 0.09f, Brass);
-    rod(v, {-100, 0, -13.7f}, {-100, layout::gateHeight, -13.7f}, 0.07f, Brass);
+        rod(grille, { -104.4f, y, -13.7f }, { -95.6f, y, -13.7f }, 0.09f, Brass);
+}//namespace
+// The golden key, 2 m long, glowing (Flame material), centred on the origin.
+void keyShape(Vertices& v) {
+    for (int i = 0; i < 16; ++i) {                                     // the bow: a ring
+        const float a = 2 * pi * i / 16, b = 2 * pi * (i + 1) / 16;
+        rod(v, { -0.7f + 0.3f * std::cos(a), 0.3f * std::sin(a), 0 },
+            { -0.7f + 0.3f * std::cos(b), 0.3f * std::sin(b), 0 }, 0.06f, Flame);
+    }
+    rod(v, { -0.4f, 0, 0 }, { 1.0f, 0, 0 }, 0.07f, Flame);                 // the shaft
+    rod(v, { 0.75f, 0, 0 }, { 0.75f, -0.35f, 0 }, 0.07f, Flame);           // two teeth
+    rod(v, { 0.95f, 0, 0 }, { 0.95f, -0.25f, 0 }, 0.07f, Flame);
 }
-} // namespace
-
 // ---------------------------------------------------------------------------
 // Mesh: one vertex buffer on the graphics card
 // ---------------------------------------------------------------------------
@@ -365,7 +373,7 @@ void Mesh::destroy() {
 // ---------------------------------------------------------------------------
 
 void Hall::build() {
-    Vertices v, front, light, marker;
+    Vertices v, front, light, marker, bars, goldenKey;
     box(v, {-108, -1, -20}, {108, 0, 20}, Floor);
     box(v, {-106, 0.025f, -3}, {88, 0.055f, 3}, Carpet);
     sideWall(v, -1);       // far wall: always drawn
@@ -373,7 +381,8 @@ void Hall::build() {
     roof(v, front);
     chandelier(v);
     throne(v);
-    gate(v);
+    gate(v, bars);
+    keyShape(goldenKey);
     for (int i = 0; i < layout::columnsPerSide - 1; ++i) {
         const float x = bayCenterX(i);
         // Keep each shaft in its bay so its transparent plane does not slice a column.
@@ -391,6 +400,8 @@ void Hall::build() {
     foreground.upload(front);
     lightShafts.upload(light);
     knight.upload(marker);
+    grille.upload(bars);
+    key.upload(goldenKey);
 }
 
 void Hall::destroy() {
@@ -398,5 +409,7 @@ void Hall::destroy() {
     foreground.destroy();
     lightShafts.destroy();
     knight.destroy();
+    grille.destroy();
+    key.destroy();
 }
 }

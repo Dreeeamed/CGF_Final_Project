@@ -32,7 +32,7 @@ static_assert(columnSpacing > 2.0f * columnBaseRadius, "Column bases must not ov
 static_assert(archHalfWidth > 2.9f, "The high windows and their rims must fit in each bay");
 }
 
-enum Material { Stone, Floor, Darkness, Banner, Carpet, Brass, Flame, Window, Door, Beam, Knight, Wall };
+enum Material { Stone, Floor, Darkness, Banner, Carpet, Brass, Flame, Window, Door, Beam, Knight, Wall, Garden};
 
 struct Vertex {
     glm::vec3 position;
@@ -54,6 +54,8 @@ struct Hall {
     Mesh foreground; // The complete second column row and its wall / gallery.
     Mesh lightShafts;
     Mesh knight;     // A 1.5 m scale marker, not the final character.
+    Mesh grille;     // The portcullis of the entrance gate: it moves up when opened.
+    Mesh key;        // The golden key, centred on the origin so it can spin in place.
     void build();
     void destroy();
 };
