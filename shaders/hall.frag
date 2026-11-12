@@ -20,10 +20,11 @@ uniform bool parallaxOn;          // P
 uniform vec2 pomLayers;           // x: layers when looking straight at the wall, y: when looking along it
 uniform int shadowSteps;          // steps of the walk towards the light
 uniform bool showBackFaces;       // B: culling is off, paint back sides red
+uniform float gateLift;           // 0 = gate closed, 1 = fully raised
 
 // Material numbers, the same order as `enum Material` in hall_geometry.h.
 const int STONE = 0, FLOOR = 1, DARKNESS = 2, BANNER = 3, CARPET = 4, BRASS = 5,
-          FLAME = 6, WINDOW = 7, DOOR = 8, BEAM = 9, KNIGHT = 10, WALL = 11;
+          FLAME = 6, WINDOW = 7, DOOR = 8, BEAM = 9, KNIGHT = 10, WALL = 11, GARDEN = 12;
 
 // ---------------------------------------------------------------------------
 // Wall axes
@@ -135,6 +136,32 @@ void main() {
         float ends = smoothstep(0.0, 0.12, UV.y) * smoothstep(0.0, 0.10, 1.0 - UV.y);
         float dust = 0.88 + 0.12 * sin(FragPos.y * 0.7 + time * 0.35);
         FragColor = vec4(0.38, 0.56, 0.72, 0.09 * edge * ends * dust);
+        return;
+    }
+        if (Material == GARDEN) {
+        // Lesson 12: the inner garden behind the gate, painted like a theatre backdrop.
+        // p is in metres: x = 0 in the middle of the gate, y = 0 on the floor.
+        vec2 p = vec2(FragPos.x + 100.0, FragPos.y);
+        vec3 colour = mix(vec3(0.10, 0.16, 0.26), vec3(0.02, 0.04, 0.09),       // night sky
+                          clamp((p.y - 2.0) / 7.0, 0.0, 1.0));
+        vec2 toMoon = p - vec2(2.2, 7.0);
+        float moon = smoothstep(0.75, 0.70, length(toMoon));                     // sharp disc
+        float halo = 0.25 / (1.0 + 6.0 * dot(toMoon, toMoon));                   // soft glow
+        colour += vec3(0.75, 0.85, 1.0) * (moon + halo);
+        float treeTops = 2.6 + 0.7 * sin(p.x * 1.9) + 0.35 * sin(p.x * 4.7 + 1.0);
+        colour = mix(colour, vec3(0.03, 0.07, 0.07), step(p.y, treeTops));       // far trees
+        float hedgeTop = 1.2 + 0.15 * sin(p.x * 6.0);
+        colour = mix(colour, vec3(0.05, 0.12, 0.08), step(p.y, hedgeTop));       // near hedge
+        float path = step(abs(p.x), 1.2 - 0.6 * p.y) * step(p.y, 1.0);           // stone path, narrower far away
+        colour = mix(colour, vec3(0.20, 0.22, 0.24), path * 0.8);
+        // Fireflies: one random spot per half-metre cell, only some cells get one.
+        vec2 cell = floor(p * 2.0);
+        float h = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
+        vec2 spot = cell + vec2(fract(h * 13.1), fract(h * 7.7));
+        float fly = smoothstep(0.08, 0.0, length(p * 2.0 - spot)) * step(0.85, h) * step(p.y, 4.0);
+        colour += vec3(0.9, 0.8, 0.3) * fly * (0.6 + 0.4 * sin(time * 3.0 + h * 20.0));
+        // Through the closed bars the garden looks dim; the open gate lets the moonlight in.
+        FragColor = vec4(colour * mix(0.55, 1.0, gateLift), 1.0);
         return;
     }
     if (Material == DARKNESS) {
