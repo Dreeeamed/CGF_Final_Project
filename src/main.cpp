@@ -14,6 +14,7 @@
 #include "castle_geometry.h"
 #include "hall_geometry.h"
 #include "material.h"
+#include "hud.h"
 
 namespace {
 void setMatrix(GLuint program, const char* name, const glm::mat4& matrix) {
@@ -84,6 +85,11 @@ int main(int argc, char* argv[]) {
         glUniform1i(glGetUniformLocation(program, "heightMap"), 1);
         glUniform1i(glGetUniformLocation(program, "normalMap"), 2);
     }
+    Hud hud;
+    if (!hud.init()) {
+        std::cerr << "Could not create the on-screen text.\n";
+        glfwDestroyWindow(window); glfwTerminate(); return 1;
+    }
 
     bool insideHall=true, showForeground=false, overview=false;
     bool parallaxOn = true;// P: the headline technique on/off, for comparing
@@ -94,6 +100,9 @@ int main(int argc, char* argv[]) {
                                  {"High", 24.0f, 96.0f, 32} };
     int quality = 1;
     bool vsync = !smokeTest, wasQ = false, wasV = false;
+    bool showHelp = false, paused = false, wasH = false, wasSpace = false;
+    float animTime = 0.0f;   // clock of the animations; stands still while paused
+    float shownFps = 0.0f;   // last measured FPS, for the on-screen text
     int fpsFrames = 0;
     float fpsTime = 0.0f;
     float knightX=-6.0f, cameraX=0.0f, distance=84.0f, lookHeight=24.0f;
@@ -103,7 +112,8 @@ int main(int argc, char* argv[]) {
     std::cout << "F1 exterior | F2 hall | A/D walk | Shift faster | W/S zoom\n"
         "Up/Down look | C full hall / cutaway | O overview | P parallax | Home reset | Esc quit\n"
         "J/L turn the light | I/K raise / lower the light\n"
-        "Q quality (Low / Medium / High) | V VSync on / off\n";
+        "Q quality (Low / Medium / High) | V VSync on / off\n"
+        "H help on screen | Space pause\n";
     const char* captures[]={"hall-centre.ppm","hall-overview.ppm","hall-entrance.ppm",
                             "hall-throne.ppm","hall-full-row.ppm","exterior.ppm"};
     while (!glfwWindowShouldClose(window)) {
@@ -144,6 +154,10 @@ int main(int argc, char* argv[]) {
             glfwSwapInterval(vsync ? 1 : 0);
             std::cout << "VSync " << (vsync ? "ON" : "OFF") << '\n';
         }
+        if (pressed(GLFW_KEY_H) && !wasH) showHelp = !showHelp;
+        if (pressed(GLFW_KEY_SPACE) && !wasSpace) paused = !paused;
+        if (!paused) animTime += dt;
+        wasH = pressed(GLFW_KEY_H); wasSpace = pressed(GLFW_KEY_SPACE);
         wasC = pressed(GLFW_KEY_C); wasO = pressed(GLFW_KEY_O); wasP = pressed(GLFW_KEY_P);
         wasQ = pressed(GLFW_KEY_Q); wasV = pressed(GLFW_KEY_V);
         // Twice a second: show the frame rate and the toggles in the window title.
@@ -151,6 +165,7 @@ int main(int argc, char* argv[]) {
         fpsTime += frameTime;
         if (fpsTime >= 0.5f) {
             const float fps = fpsFrames / fpsTime;
+            shownFps = fps;
             char title[160];
             std::snprintf(title, sizeof(title), "Castle - %.0f FPS (%.1f ms) | POM %s | Quality %s | VSync %s",
                 fps, 1000.0f / fps, parallaxOn ? "ON" : "OFF", qualities[quality].name,
@@ -207,7 +222,7 @@ int main(int argc, char* argv[]) {
         glUniform3fv(glGetUniformLocation(program, "lightDir"), 1, glm::value_ptr(lightDir));
         glUniform3fv(glGetUniformLocation(program,"cameraPos"),1,glm::value_ptr(cameraPos));
         glUniform3f(glGetUniformLocation(program,"lightPos"),-8,12,6);
-        glUniform1f(glGetUniformLocation(program,"time"),smokeTest?0.0f:time);
+        glUniform1f(glGetUniformLocation(program,"time"),smokeTest?0.0f:animTime);
         glUniform1i(glGetUniformLocation(program, "parallaxOn"), parallaxOn);
         glUniform2f(glGetUniformLocation(program, "pomLayers"), qualities[quality].minLayers,
             qualities[quality].maxLayers);
@@ -232,6 +247,31 @@ int main(int argc, char* argv[]) {
             glDepthMask(GL_TRUE);
             glDisable(GL_BLEND);
         } else castle.draw();
+        const glm::vec4 panel(0.02f, 0.03f, 0.05f, 0.65f), parchment(0.93f, 0.86f, 0.70f, 1.0f),
+            gold(1.0f, 0.70f, 0.28f, 1.0f);
+        char status[160];
+        std::snprintf(status, sizeof(status), "POM: %s   Quality: %s   VSync: %s%s\n%.0f FPS (%.1f ms)   H - help",
+            parallaxOn ? "ON" : "OFF", qualities[quality].name, vsync ? "on" : "off",
+            paused ? "   PAUSED" : "", shownFps, shownFps > 0.0f ? 1000.0f / shownFps : 0.0f);
+        const std::string info = std::string("Topic 15: 2.5D castle with parallax occlusion on walls\n")
+            + "Akezhan Muzamelov, Bolatbek Bolat, Adil Dyussenov\n" + status;
+        hud.begin(width, height);
+        hud.rect(16, 16, hud.width(info) + 32, hud.height(info) + 24, panel);
+        hud.text(32, 28, info, parchment);
+        if (showHelp) {
+            const std::string keys = "A / D\nShift\nW / S\nUp / Down\nO\nC\nHome\nF1 / F2\n"
+                "P\nQ\nJ / L\nI / K\nSpace\nV\nH\nEsc";
+            const std::string actions = "walk left / right\nwalk faster\nzoom in / out\nlook higher / lower\n"
+                "overview of the hall\nfull hall / cutaway\nreset the camera\nexterior / hall\n"
+                "parallax occlusion on / off\nPOM quality: Low / Medium / High\nturn the light\n"
+                "raise / lower the light\npause animation\nVSync on / off\nhide this help\nquit";
+            const float top = hud.height(info) + 56;
+            const float column = hud.width(keys) + 32;
+            hud.rect(16, top, column + hud.width(actions) + 32, hud.height(keys) + 24, panel);
+            hud.text(32, top + 12, keys, gold);
+            hud.text(32 + column, top + 12, actions, parchment);
+        }
+        hud.end();
         if (capture && !captureFrame(captureDir/captures[renderedFrames],width,height)) {
             std::cerr << "Could not save capture.\n"; exitCode=1; break;
         }
@@ -247,7 +287,7 @@ int main(int argc, char* argv[]) {
             }
         }
     }
-    hall.destroy(); castle.destroy();
+    hud.destroy(); hall.destroy(); castle.destroy();
     glDeleteTextures(1,&texture);
     glDeleteTextures(1, &heightMap);
     glDeleteTextures(1, &normalMap);
