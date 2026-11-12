@@ -138,7 +138,7 @@ void main() {
         FragColor = vec4(0.38, 0.56, 0.72, 0.09 * edge * ends * dust);
         return;
     }
-        if (Material == GARDEN) {
+    if (Material == GARDEN) {
         // Lesson 12: the inner garden behind the gate, painted like a theatre backdrop.
         // p is in metres: x = 0 in the middle of the gate, y = 0 on the floor.
         vec2 p = vec2(FragPos.x + 100.0, FragPos.y);

@@ -314,24 +314,27 @@ void gate(Vertices& v, Vertices& grille) {
     portal(v, -100, 0, 4.5f, 6, 3, -8, -1, 12, Garden);
     // The gate stands away from the wall: give its deep sides an outer face too.
     for (int half : {-1, 1})
-        box(v, { -100 + half * 4.5f - 0.35f, 0, -14 }, { -100 + half * 4.5f + 0.35f, 6, -7.5f });
+        box(v, {-100 + half * 4.5f - 0.35f, 0, -14}, {-100 + half * 4.5f + 0.35f, 6, -7.5f});
     // The grille: nine vertical bars and two cross bars. A separate mesh, so it can rise.
     for (int i = -4; i <= 4; ++i)
-        rod(grille, { -100.0f + i, 0, -13.8f }, { -100.0f + i, 6.1f, -13.8f }, 0.06f, Brass);
+        rod(grille, {-100.0f + i, 0, -13.8f}, {-100.0f + i, 6.1f, -13.8f}, 0.06f, Brass);
     for (float y : {1.0f, 4.8f})
-        rod(grille, { -104.4f, y, -13.7f }, { -95.6f, y, -13.7f }, 0.09f, Brass);
-}//namespace
+        rod(grille, {-104.4f, y, -13.7f}, {-95.6f, y, -13.7f}, 0.09f, Brass);
+}
+
 // The golden key, 2 m long, glowing (Flame material), centred on the origin.
 void keyShape(Vertices& v) {
     for (int i = 0; i < 16; ++i) {                                     // the bow: a ring
         const float a = 2 * pi * i / 16, b = 2 * pi * (i + 1) / 16;
-        rod(v, { -0.7f + 0.3f * std::cos(a), 0.3f * std::sin(a), 0 },
-            { -0.7f + 0.3f * std::cos(b), 0.3f * std::sin(b), 0 }, 0.06f, Flame);
+        rod(v, {-0.7f + 0.3f * std::cos(a), 0.3f * std::sin(a), 0},
+               {-0.7f + 0.3f * std::cos(b), 0.3f * std::sin(b), 0}, 0.06f, Flame);
     }
-    rod(v, { -0.4f, 0, 0 }, { 1.0f, 0, 0 }, 0.07f, Flame);                 // the shaft
-    rod(v, { 0.75f, 0, 0 }, { 0.75f, -0.35f, 0 }, 0.07f, Flame);           // two teeth
-    rod(v, { 0.95f, 0, 0 }, { 0.95f, -0.25f, 0 }, 0.07f, Flame);
+    rod(v, {-0.4f, 0, 0}, {1.0f, 0, 0}, 0.07f, Flame);                 // the shaft
+    rod(v, {0.75f, 0, 0}, {0.75f, -0.35f, 0}, 0.07f, Flame);           // two teeth
+    rod(v, {0.95f, 0, 0}, {0.95f, -0.25f, 0}, 0.07f, Flame);
 }
+} // namespace
+
 // ---------------------------------------------------------------------------
 // Mesh: one vertex buffer on the graphics card
 // ---------------------------------------------------------------------------

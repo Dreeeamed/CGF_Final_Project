@@ -109,12 +109,13 @@ std::string titleText(float fps, bool parallaxOn, const Quality& quality, bool v
 }
 
 // Top-left panel: topic, team, switches and frame rate.
-std::string infoText(bool parallaxOn, const Quality& quality, bool vsync, bool paused, bool freeCamera, float fps) {
+std::string infoText(bool parallaxOn, const Quality& quality, bool vsync, bool paused, bool freeCamera, bool hasKey, float fps) {
     char status[160];
     std::snprintf(status, sizeof(status),
-                  "POM: %s   Quality: %s   VSync: %s%s%s\n%.0f FPS (%.1f ms)   H - help",
+                  "POM: %s   Quality: %s   VSync: %s%s%s\n%.0f FPS (%.1f ms) Key: %s   H - help",
                   parallaxOn ? "ON" : "OFF", quality.name, vsync ? "on" : "off",
-                  paused ? "   PAUSED" : "",freeCamera ? "   FREE CAMERA" : "", fps, fps > 0.0f ? 1000.0f / fps : 0.0f);
+                  paused ? "   PAUSED" : "",freeCamera ? "   FREE CAMERA" : "", fps, fps > 0.0f ? 1000.0f / fps : 0.0f,
+                  hasKey ? "found" : "not found");
     return std::string("Topic 15: 2.5D castle with parallax occlusion on walls\n")
          + "Akezhan Muzamelov, Bolatbek Bolat, Adil Dyussenov\n" + status;
 }
@@ -125,7 +126,7 @@ void drawHud(Hud& hud, int width, int height, const std::string& info, bool show
     const glm::vec4 parchment(0.93f, 0.86f, 0.70f, 1.0f);
     const glm::vec4 gold(1.0f, 0.70f, 0.28f, 1.0f);
     const glm::vec4 warning(1.0f, 0.35f, 0.3f, 1.0f);
-
+    const std::string& hint;
     hud.begin(width, height);
     hud.rect(16, 16, hud.width(info) + 32, hud.height(info) + 24, panel);
     hud.text(32, 28, info, parchment);
@@ -139,6 +140,13 @@ void drawHud(Hud& hud, int width, int height, const std::string& info, bool show
     }
     if (!culling)
         hud.text(32, float(height) - 48, "CULLING OFF: red = back side of a triangle", warning);
+    if (!hint.empty()) {
+        // Centred near the bottom: (screen width - text width) / 2.
+        const float x = (float(width) - hud.width(hint)) * 0.5f;
+        const float y = float(height) - 120.0f;
+        hud.rect(x - 16, y - 12, hud.width(hint) + 32, hud.height(hint) + 16, panel);
+        hud.text(x, y, hint, gold);
+    }
     hud.end();
 }
 
@@ -146,6 +154,18 @@ void drawHud(Hud& hud, int width, int height, const std::string& info, bool show
 // Lesson 11: the free-fly camera looks along this direction.
 // yaw turns left / right, pitch looks up / down (radians).
 // yaw = 0, pitch = 0 looks along -Z: from the camera side into the hall.
+// Lesson 12: what the knight can do right here, shown at the bottom of the screen.
+std::string questHint(bool nearKey, bool nearGate, bool hasKey, float gateLift, bool inGarden) {
+    if (inGarden) return "You are in the inner garden.   E - back to the hall";
+    if (nearKey) return "A golden key at the foot of the throne.   E - take it";
+    if (nearGate) {
+        if (!hasKey) return "The gate is locked. The key lies at the foot of the throne.";
+        if (gateLift == 0.0f) return "E - open the gate with the key";
+        if (gateLift < 1.0f) return "The gate is rising...";
+        return "E - enter the inner garden";
+    }
+    return "";
+}
 glm::vec3 directionFromAngles(float yaw, float pitch) {
     return glm::vec3(std::cos(pitch) * std::sin(yaw),
         std::sin(pitch),
@@ -233,6 +253,14 @@ int main(int argc, char* argv[]) {
     float cameraX = -78.0f;       // the camera follows him smoothly
     float distance = 40.0f;       // how far the camera is from the centre line
     float lookHeight = 10.0f;     // the height the camera looks at
+    // Lesson 12, the quest: take the key at the throne, open the gate, enter the garden.
+    const float keyX = 80.0f;     // the key floats at the foot of the throne
+    const float gateX = -100.0f;  // the entrance gate, where the knight starts
+    bool hasKey = false;
+    bool gateOpening = false;     // set once, when the key opens the gate
+    float gateLift = 0.0f;        // 0 = closed, 1 = fully raised
+    bool inGarden = false;        // where the knight wants to be
+    float gardenWalk = 0.0f;      // 0 = on the carpet, 1 = inside the gate
 
     // Free-fly camera (Tab): its own position and look angles.
     bool freeCamera = false;
@@ -371,7 +399,8 @@ int main(int argc, char* argv[]) {
             const glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0, 1, 0)));
             const float ahead = float(pressed(GLFW_KEY_W)) - float(pressed(GLFW_KEY_S));
             const float rise = float(pressed(GLFW_KEY_R)) - float(pressed(GLFW_KEY_F));
-            const float speed = pressed(GLFW_KEY_LEFT_SHIFT) ? 30.0f : 10.0f;
+            float speed = pressed(GLFW_KEY_LEFT_SHIFT) ? 18.0f : 7.0f;
+            if (gardenWalk > 0.0f) speed = 0.0f;   // walking through the gate: A/D do nothing
             freePos += (forward * ahead + right * direction + glm::vec3(0, rise, 0)) * speed * dt;
             // Stay inside the hall: the walls have no outer side to look at.
             freePos = glm::clamp(freePos, glm::vec3(-106, 1, -18), glm::vec3(106, 58, 18));
@@ -394,7 +423,8 @@ int main(int argc, char* argv[]) {
 
         // Smoke test: fixed views, so the saved images can be compared between versions.
         if (smokeTest) {
-            insideHall = true; showForeground = false;freeCamera = false;
+            insideHall = true; showForeground = false; freeCamera = false;
+            hasKey = false; gateLift = 0.0f; inGarden = false; gardenWalk = 0.0f;
             cameraX = 0; knightX = -6; distance = 84; lookHeight = 24;
             if (capture) {
                 if (renderedFrames == 1) { distance = 154; lookHeight = 26; }
@@ -408,12 +438,29 @@ int main(int argc, char* argv[]) {
                     freeYaw = -0.9f;
                     freePitch = -0.12f;
 				}
+                if (renderedFrames == 7) {   // the end of the quest: open gate, knight walking in
+                    cameraX = -92; knightX = -100; distance = 30; lookHeight = 6;
+                    hasKey = true; gateLift = 1.0f; inGarden = true; gardenWalk = 0.6f;
+                }
             } else {
                 if (renderedFrames == 1) showForeground = true;
                 if (renderedFrames == 2) { insideHall = false; distance = 14; lookHeight = 3.5f; }
             }
         }
-
+        // ---- 5b. The quest ---------------------------------------------------
+        const bool nearKey = !hasKey && std::abs(knightX - keyX) < 3.0f;
+        const bool nearGate = std::abs(knightX - gateX) < 5.0f;
+        if (keyE.justPressed(window) && insideHall && !freeCamera) {
+            if (nearKey) hasKey = true;
+            else if (nearGate && hasKey && !gateOpening) gateOpening = true;
+            else if (nearGate && gateLift >= 1.0f) inGarden = !inGarden;
+        }
+        if (!paused && !smokeTest) {   // the smoke test shows fixed states
+            // The gate rises in 2.5 s; the walk through it takes 2 s each way.
+            if (gateOpening) gateLift = std::min(gateLift + dt / 2.5f, 1.0f);
+            const float walkTarget = inGarden ? 1.0f : 0.0f;
+            gardenWalk += std::clamp(walkTarget - gardenWalk, -dt / 2.0f, dt / 2.0f);
+        }
         // ---- 6. Draw the scene ---------------------------------------------
         int width, height;
         glfwGetFramebufferSize(window, &width, &height);
@@ -439,7 +486,9 @@ int main(int argc, char* argv[]) {
         glUniform3fv(glGetUniformLocation(program, "lightDir"), 1, glm::value_ptr(lightDir));
         glUniform3fv(glGetUniformLocation(program, "cameraPos"), 1, glm::value_ptr(cameraPos));
         glUniform3f(glGetUniformLocation(program, "lightPos"), -8, 12, 6);
-        glUniform1f(glGetUniformLocation(program, "time"), smokeTest ? 0.0f : animTime);
+        const float clock = smokeTest ? 0.0f : animTime;   // fixed in the smoke test
+        glUniform1f(glGetUniformLocation(program, "time"), clock);
+        glUniform1f(glGetUniformLocation(program, "gateLift"), gateLift);
         glUniform1i(glGetUniformLocation(program, "parallaxOn"), parallaxOn);
         glUniform1i(glGetUniformLocation(program, "showBackFaces"), !culling);
         glUniform2f(glGetUniformLocation(program, "pomLayers"),
@@ -463,8 +512,21 @@ int main(int argc, char* argv[]) {
                 hall.foreground.draw();
                 if (culling) glEnable(GL_CULL_FACE);
             }
-            setMatrix(program, "model", glm::translate(glm::mat4(1), glm::vec3(knightX, 0.06f, 0)));
+            // The knight: on the carpet, or part of the way into the gate (gardenWalk).
+            const float walkX = knightX + (gateX - knightX) * gardenWalk;
+            const float walkZ = -11.0f * gardenWalk;
+            setMatrix(program, "model", glm::translate(glm::mat4(1), glm::vec3(walkX, 0.06f, walkZ)));
             hall.knight.draw();
+            // The portcullis, lifted by up to 4.6 m.
+            setMatrix(program, "model", glm::translate(glm::mat4(1), glm::vec3(0, gateLift * 4.6f, 0)));
+            hall.grille.draw();
+            // The key: spins and bobs over the carpet until it is taken.
+            if (!hasKey) {
+                glm::mat4 model = glm::translate(glm::mat4(1), glm::vec3(keyX, 1.8f + 0.2f * std::sin(clock * 2.0f), 0));
+                model = glm::rotate(model, clock * 1.5f, glm::vec3(0, 1, 0));
+                setMatrix(program, "model", model);
+                hall.key.draw();
+            }
             setMatrix(program, "model", glm::mat4(1));
 
             // Light shafts are see-through: blend them over the hall, do not hide what is behind.
@@ -481,8 +543,11 @@ int main(int argc, char* argv[]) {
         }
 
         // ---- 7. Text over the picture --------------------------------------
-        const std::string info = infoText(parallaxOn, qualities[quality], vsync, paused, freeCamera, shownFps);
-        drawHud(hud, width, height, info, showHelp, culling);
+        const std::string info = infoText(parallaxOn, qualities[quality], vsync, paused, freeCamera,
+            hasKey, shownFps);
+        const std::string hint = (insideHall && !freeCamera)
+            ? questHint(nearKey, nearGate, hasKey, gateLift, inGarden) : "";
+        drawHud(hud, width, height, info, showHelp, culling, hint);
 
         // ---- 8. Show the picture (and check it in the smoke test) ----------
         if (capture && !captureFrame(captureDir / captures[renderedFrames], width, height)) {
@@ -494,7 +559,7 @@ int main(int argc, char* argv[]) {
             if (error != GL_NO_ERROR) {
                 std::cerr << "OpenGL smoke test failed: " << error << '\n'; exitCode = 1; break;
             }
-            if (++renderedFrames == (capture ? 7 : 3)) {
+            if (++renderedFrames == (capture ? 8 : 3)) {
                 std::cout << "Smoke test passed: " << renderedFrames << " frames rendered.\n";
                 break;
             }
