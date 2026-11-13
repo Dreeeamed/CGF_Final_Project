@@ -488,7 +488,8 @@ int main(int argc, char* argv[]) {
         // Minimised window: sleep until the next event instead of spinning the CPU.
         if (width == 0 || height == 0) { glfwWaitEvents(); continue; }
         post.beginScene(width, height);   // lesson 14: draw into our HDR picture, not the window
-        glClearColor(0.025f, 0.042f, 0.072f, 1.0f);
+        // Lesson 15: the background is light energy too (decoded like in hall.frag).
+        glClearColor(std::pow(0.025f, 2.2f), std::pow(0.042f, 2.2f), std::pow(0.072f, 2.2f), 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glm::vec3 cameraPos(cameraX, insideHall ? lookHeight + 12.0f : 4.0f, distance);

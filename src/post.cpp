@@ -36,7 +36,8 @@ bool PostProcess::resize(int w, int h) {
     glGenTextures(1, &colour);
     glBindTexture(GL_TEXTURE_2D, colour);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_FLOAT, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glGenerateMipmap(GL_TEXTURE_2D);   // lesson 15: room for the smaller copies (1/2, 1/4, 1/8 ...)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -61,6 +62,10 @@ void PostProcess::finish(float time, bool enabled) {
     glBindFramebuffer(GL_READ_FRAMEBUFFER, msFbo);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
     glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    // Lesson 15: shrink the picture again and again (each pixel = average of 2 x 2).
+    // A tiny copy stretched back over the screen is a blurred picture: the base of the glow.
+    glBindTexture(GL_TEXTURE_2D, colour);
+    glGenerateMipmap(GL_TEXTURE_2D);
 
     // Back to the window: one triangle over the whole screen, the shader does the rest.
     glBindFramebuffer(GL_FRAMEBUFFER, 0);

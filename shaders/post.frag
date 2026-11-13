@@ -16,21 +16,34 @@ vec3 aces(vec3 x) {
     return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
 }
 
+// Lesson 15: glow (bloom). The mipmaps are blurred copies of the picture: level 2 is
+// 1/4 of the size, level 6 is 1/64. Only light brighter than `threshold` spills over,
+// a little from every level: narrow glow near the light, wide soft glow further out.
+const float threshold = 0.5;
+const float glowStrength = 0.8;
+vec3 glow(vec2 p) {
+    vec3 sum = vec3(0.0);
+    for (int level = 2; level <= 6; level++) {
+        vec3 blurred = textureLod(scene, p, float(level)).rgb;
+        sum += max(blurred - threshold, 0.0);
+    }
+    return sum;
+}
+
 // A pseudo-random number 0..1 for every pixel: film grain.
 float hash(vec2 p) {
     return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
 void main() {
-    vec3 c = texture(scene, uv).rgb;
-    if (!enabled) {   // the old look: just cut everything above 1.0
-        FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+    vec3 c = textureLod(scene, uv, 0.0).rgb;   // level 0: the full-size picture
+    if (!enabled) {   // the old look: cut everything above 1.0, encode for the monitor
+        FragColor = vec4(pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);
         return;
     }
 
-    // 1. Our hall colours were picked by eye on the monitor, so they are "gamma-encoded".
-    //    ACES works with real light energy: decode first (2.2 = the usual monitor gamma).
-    c = pow(c, vec3(2.2));
+    // 1. Glow. (Since lesson 15 the hall already gives light energy: no decoding here.)
+    c += glow(uv) * glowStrength;
 
     // 2. Exposure and tone mapping.
     c = aces(c * exposure);

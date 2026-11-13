@@ -125,7 +125,9 @@ float stoneVariation(vec3 p, vec3 n) {
     return mix(0.86, dot(colour, vec3(0.2126, 0.7152, 0.0722)), 0.32);
 }
 
-void main() {
+// Lesson 15: the old main() is now shade(); the new main() at the end of the file
+// turns its colour into light energy for the post pass.
+void shade() {
     // Debug view (key B): the back side of a triangle is painted red.
     if (showBackFaces && !gl_FrontFacing) { FragColor = vec4(1.0, 0.0, 0.0, 1.0); return; }
 
@@ -135,7 +137,7 @@ void main() {
         float edge = smoothstep(0.0, 0.28, UV.x) * smoothstep(0.0, 0.28, 1.0 - UV.x);
         float ends = smoothstep(0.0, 0.12, UV.y) * smoothstep(0.0, 0.10, 1.0 - UV.y);
         float dust = 0.88 + 0.12 * sin(FragPos.y * 0.7 + time * 0.35);
-        FragColor = vec4(0.38, 0.56, 0.72, 0.09 * edge * ends * dust);
+        FragColor = vec4(0.38, 0.56, 0.72, 0.06 * edge * ends * dust);   // lesson 15: thinner, blending is in light energy now
         return;
     }
     if (Material == GARDEN) {
@@ -244,11 +246,12 @@ void main() {
     }
     if (Material == FLAME) {
         // Candle flames glow by themselves and flicker a little.
-        FragColor = vec4(vec3(1.0, 0.72, 0.31) * (0.94 + 0.06 * sin(time * 4.0 + FragPos.x)), 1.0);
+        // Lesson 15: brighter than white (HDR), so the post pass makes them glow.
+        FragColor = vec4(vec3(1.0, 0.72, 0.31) * 3.0 * (0.94 + 0.06 * sin(time * 4.0 + FragPos.x)), 1.0);
         return;
     }
     if (Material == WINDOW) {
-        FragColor = vec4(0.48, 0.63, 0.76, 1.0);   // night sky behind the glass
+        FragColor = vec4(vec3(0.48, 0.63, 0.76) * 1.3, 1.0);   // night sky behind the glass; lesson 15: glows a little
         return;
     }
     if (Material == DOOR) {
@@ -281,4 +284,12 @@ void main() {
     float fog = min(0.28, depth * 0.13 + lowMist);
     colour = mix(colour, vec3(0.075, 0.12, 0.18), fog);
     FragColor = vec4(colour, 1.0);
+}
+
+// Lesson 15: we picked the colours by eye on the monitor, so they are "gamma-encoded".
+// Light adds up and blurs correctly only as energy: decode here, once for every material.
+// post.frag encodes back for the monitor at the very end.
+void main() {
+    shade();
+    FragColor.rgb = pow(max(FragColor.rgb, 0.0), vec3(2.2));
 }
