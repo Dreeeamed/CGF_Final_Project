@@ -30,7 +30,7 @@ FetchContent_Declare(glm
 FetchContent_MakeAvailable(glfw glm)
 
 # Checked-in generated loader: no Python or GLAD installation is needed.
-add_library(glad STATIC third_party/glad/src/glad.c)
+add_library(glad STATIC third_party/glad/src/glad.c "src/post.h" "src/post.cpp")
 add_library(glad::glad ALIAS glad)
 target_include_directories(glad PUBLIC third_party/glad/include)
 target_link_libraries(glad PRIVATE ${CMAKE_DL_LIBS})
@@ -41,6 +41,7 @@ add_executable(simple_castle
     src/hall_geometry.cpp
     src/material.cpp
     src/hud.cpp
+    src/post.cpp
 )
 target_include_directories(simple_castle PRIVATE src third_party/stb)
 target_link_libraries(simple_castle PRIVATE glfw glad::glad glm::glm)
