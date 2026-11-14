@@ -102,20 +102,20 @@ void rod(Vertices& v, glm::vec3 a, glm::vec3 b, float radius, Material m = Brass
 // Parts of the hall
 // ---------------------------------------------------------------------------
 
-//Lesson 16: a black marble shaft with gold trims.
+// Lesson 16: a black marble shaft with gold trims.
 void column(Vertices& v, float x, float z) {
-    //All horizontal radii shrink together; the supporting height stays at 44m
+    // All horizontal radii shrink together; the supporting height stays at 44 m.
     const float radius = layout::columnRadius;
     const float baseRadius = layout::columnBaseRadius;
     const float collarRadius = layout::columnCollarRadius;
-    cylinder(v, {x,0,z}, 0.7f, baseRadius, baseRadius, Gold);   // plinth
-    cylinder(v, {x,0.7f, z}, 0.7f, baseRadius, radius, Gold);       // base moulding
-    cylinder(v, {x,1.4f,z }, 40.4f, radius, radius, Marble);//shaft
-    cylinder(v, {x,41.8f,z }, 1.4f, radius, baseRadius, Gold);//capital
-    cylinder(v, {x,43.2f,z}, 0.8f, baseRadius, baseRadius, Gold);//abacus
+    cylinder(v, {x, 0, z},     0.7f,  baseRadius, baseRadius, Gold);   // plinth
+    cylinder(v, {x, 0.7f, z},  0.7f,  baseRadius, radius, Gold);       // base moulding
+    cylinder(v, {x, 1.4f, z},  40.4f, radius, radius, Marble);         // shaft
+    cylinder(v, {x, 41.8f, z}, 1.4f,  radius, baseRadius, Gold);       // capital
+    cylinder(v, {x, 43.2f, z}, 0.8f,  baseRadius, baseRadius, Gold);   // abacus
     // Narrow gold collars divide the huge vertical silhouette.
-    cylinder(v, {x,10,z}, 0.35f, collarRadius, collarRadius, Gold);
-    cylinder(v, {x,31,z}, 0.35f, collarRadius, collarRadius, Gold);
+    cylinder(v, {x, 10, z}, 0.35f, collarRadius, collarRadius, Gold);
+    cylinder(v, {x, 31, z}, 0.35f, collarRadius, collarRadius, Gold);
 }
 
 // A pointed arch with a real six-metre recess behind it. Only its far end is dark.
@@ -173,21 +173,31 @@ void portal(Vertices& v, float cx, float base, float halfWidth, float spring,
             {cx + halfWidth, base, backZ}, {cx - halfWidth, base, backZ}, Stone, side > 0);
 }
 
-// A hanging banner on a rod: a cloth strip with a gentle wave and a pointed bottom.
-void banner(Vertices& v, float x, float z) {
-    rod(v, {x - 2.3f, 34, z}, {x + 2.3f, 34, z}, 0.12f);
-    constexpr int panels = 24;
+// Lesson 17: a long banner hanging from a gold rod; its bottom edge ends in a point.
+//   topLeft - the top-left corner, across - from the left edge to the right edge,
+//   height  - of the straight part, tip - how much lower the point hangs.
+// UV: x goes 0..1 across, y goes from 0 at the tip to 1 at the top (the shader draws the sigil).
+void hangingBanner(Vertices& v, glm::vec3 topLeft, glm::vec3 across, float height, float tip, Material m) {
+    constexpr int panels = 16;
+    const float total = height + tip;
+    const glm::vec3 out = glm::normalize(glm::cross(across, glm::vec3(0, 1, 0)));   // sideways: for the waves
     for (int i = 0; i < panels; ++i) {
         const float u0 = float(i) / panels, u1 = float(i + 1) / panels;
-        const float x0 = x - 1.8f + 3.6f * u0, x1 = x - 1.8f + 3.6f * u1;
-        const float z0 = z + 0.18f * std::sin(u0 * pi * 6), z1 = z + 0.18f * std::sin(u1 * pi * 6);
-        const float y0 = 19 + 1.5f * std::abs(2 * u0 - 1), y1 = 19 + 1.5f * std::abs(2 * u1 - 1);
-        triangle(v, {x0, y0, z0}, {x1, y1, z1}, {x1, 33.7f, z1}, Banner, {u0, 0}, {u1, 0}, {u1, 1});
-        triangle(v, {x0, y0, z0}, {x1, 33.7f, z1}, {x0, 33.7f, z0}, Banner, {u0, 0}, {u1, 1}, {u0, 1});
-        // Cloth has two sides: the same two triangles again, corners in reverse order.
-        triangle(v, {x0, y0, z0}, {x1, 33.7f, z1}, {x1, y1, z1}, Banner, {u0, 0}, {u1, 1}, {u1, 0});
-        triangle(v, {x0, y0, z0}, {x0, 33.7f, z0}, {x1, 33.7f, z1}, Banner, {u0, 0}, {u0, 1}, {u1, 1});
+        // Top corners, waved a little; the bottom hangs lower towards the middle (the point).
+        const glm::vec3 a0 = topLeft + across * u0 + out * (0.12f * std::sin(u0 * pi * 6));
+        const glm::vec3 a1 = topLeft + across * u1 + out * (0.12f * std::sin(u1 * pi * 6));
+        const float drop0 = height + tip * (1.0f - std::abs(2 * u0 - 1));
+        const float drop1 = height + tip * (1.0f - std::abs(2 * u1 - 1));
+        const glm::vec3 b0 = a0 - glm::vec3(0, drop0, 0), b1 = a1 - glm::vec3(0, drop1, 0);
+        const glm::vec2 ta0(u0, 1), ta1(u1, 1), tb0(u0, 1 - drop0 / total), tb1(u1, 1 - drop1 / total);
+        // Cloth has two sides: the front pair, then the same corners in reverse order.
+        triangle(v, b0, b1, a1, m, tb0, tb1, ta1);
+        triangle(v, b0, a1, a0, m, tb0, ta1, ta0);
+        triangle(v, b0, a1, b1, m, tb0, ta1, tb1);
+        triangle(v, b0, a0, a1, m, tb0, ta0, ta1);
     }
+    rod(v, topLeft - across * 0.06f + glm::vec3(0, 0.3f, 0),
+           topLeft + across * 1.06f + glm::vec3(0, 0.3f, 0), 0.15f, Gold);
 }
 
 // One long side of the hall: wall piers, columns, two rows of arches, high windows,
@@ -219,7 +229,6 @@ void sideWall(Vertices& v, int side) {
         // The window cross.
         rod(v, {x, 46, z - side * 0.6f}, {x, 54.7f, z - side * 0.6f}, 0.10f, Stone);
         rod(v, {x - 2.1f, 50, z - side * 0.6f}, {x + 2.1f, 50, z - side * 0.6f}, 0.10f, Stone);
-        banner(v, x, side * 8.7f);
     }
 
     // Galleries extend towards the aisle, but stay outside its clear centre.
@@ -243,14 +252,13 @@ void sideWall(Vertices& v, int side) {
 // Two circle arcs meet at the top in a point. The arc that starts at the far wall
 // (z = -20) has its centre on the other side of the middle, at z = +c, and the other
 // way round: that is why they meet at an angle instead of making one round curve.
-
 float vaultY(float z) {
-    const float a = layout::width * 0.5f;//20m half of the width
-    const float h = layout::vaultApex - layout::vaultSpring;//24m: how high the vault rises
-    const float c = (h * h - a * a) / (2.0f * a);//4.4m the center past the middle
-	const float r = c + a;//24.4m radius of each arc
-    const float d = std::abs(z) + c;//across distance to that center
-	return layout::vaultSpring + std::sqrt(std::max(r * r - d * d, 0.0f));//circle y^2 = r^2 - d^2
+    const float a = layout::width * 0.5f;                      // 20 m: half of the width
+    const float h = layout::vaultApex - layout::vaultSpring;   // 24 m: how high the vault rises
+    const float c = (h * h - a * a) / (2.0f * a);              // 4.4 m: the centre past the middle
+    const float r = a + c;                                     // 24.4 m: radius of each arc
+    const float d = std::abs(z) + c;                           // across distance to that centre
+    return layout::vaultSpring + std::sqrt(std::max(r * r - d * d, 0.0f));   // circle: y^2 = r^2 - d^2
 }
 
 // Lesson 16: the vault in 1 m strips across the hall, the two end walls below it,
@@ -264,10 +272,10 @@ void vault(Vertices& v, Vertices& foreground) {
         const float y0 = vaultY(z0), y1 = vaultY(z1);
         Vertices& target = z1 <= 0.0f ? v : foreground;
         // z grows across the WHOLE hall here, so one corner order faces down on both halves.
-        quad(target, { -108, y0, z0 }, { 108, y0, z0 }, { 108, y1, z1 }, { -108, y1, z1 }, Stone);
+        quad(target, {-108, y0, z0}, {108, y0, z0}, {108, y1, z1}, {-108, y1, z1}, Stone);
         // The end walls under this strip (POM stone). The wall at x = -108 looks the other way.
         for (float x : {-108.0f, 108.0f})
-            quad(target, { x, 0, z0 }, { x, 0, z1 }, { x, y1, z1 }, { x, y0, z0 }, Wall, x < 0);
+            quad(target, {x, 0, z0}, {x, 0, z1}, {x, y1, z1}, {x, y0, z0}, Wall, x < 0);
         // This strip's piece of every rib.
         const float t0 = float(i) / strips, t1 = float(i + 1) / strips;
         for (int col = 0; col < layout::columnsPerSide; ++col)
@@ -279,16 +287,59 @@ void vault(Vertices& v, Vertices& foreground) {
         }
     }
     // The ridge rib along the top, and a gold boss where the diagonals cross.
-    rod(v, { -108, layout::vaultApex - 0.45f, 0 }, { 108, layout::vaultApex - 0.45f, 0 }, 0.42f, Gold);
+    rod(v, {-108, layout::vaultApex - 0.45f, 0}, {108, layout::vaultApex - 0.45f, 0}, 0.42f, Gold);
     for (int bay = 0; bay + 1 < layout::columnsPerSide; ++bay)
-        cylinder(v, { bayCenterX(bay), layout::vaultApex - 2.2f, 0 }, 1.6f, 0.4f, 1.1f, Gold, 16);
+        cylinder(v, {bayCenterX(bay), layout::vaultApex - 2.2f, 0}, 1.6f, 0.4f, 1.1f, Gold, 16);
 }
 
-
-
+// Lesson 17: pointed arches from column top to column top along both rows of columns,
+// with a POM stone wall above them up to the cornice at 62 m.
+// The nave face looks at the middle of the hall, the aisle face at the side wall.
+void arcade(Vertices& v, Vertices& foreground) {
+    const float spring = 44.0f, rise = 12.0f;   // the arches start on the columns and rise 12 m
+    const float band = 2.2f, depth = 2.6f, top = 62.0f;
+    for (int side : {-1, 1}) {
+        Vertices& target = side < 0 ? v : foreground;
+        const float naveZ = side * layout::rowZ - side * depth * 0.5f;
+        const float aisleZ = side * layout::rowZ + side * depth * 0.5f;
+        for (int bay = 0; bay + 1 < layout::columnsPerSide; ++bay) {
+            const float xa = columnX(bay), xb = columnX(bay + 1);
+            const float cx = (xa + xb) * 0.5f, a = (xb - xa) * 0.5f;
+            // The same two-arc pointed curve as vaultY(), now standing between two columns.
+            const float c = (rise * rise - a * a) / (2.0f * a), r = a + c;
+            auto arch = [&](float t) {   // t = 0 at column xa, t = 1 at column xb
+                const float x = xa + (xb - xa) * t, d = std::abs(x - cx) + c;
+                return glm::vec2(x, spring + std::sqrt(std::max(r * r - d * d, 0.0f)));
+            };
+            constexpr int n = 24;
+            for (int i = 0; i < n; ++i) {
+                const glm::vec2 p0 = arch(float(i) / n), p1 = arch(float(i + 1) / n);       // inner edge
+                const glm::vec2 q0 = p0 + glm::vec2(0, band), q1 = p1 + glm::vec2(0, band);  // outer edge
+                // Both faces: the marble band of the arch and the POM wall above it.
+                // Written facing +z; flip the faces that must look towards -z.
+                for (bool nave : {true, false}) {
+                    const float z = nave ? naveZ : aisleZ;
+                    const bool flip = nave == (side > 0);
+                    quad(target, {p0.x, p0.y, z}, {p1.x, p1.y, z}, {q1.x, q1.y, z}, {q0.x, q0.y, z}, Marble, flip);
+                    quad(target, {q0.x, q0.y, z}, {q1.x, q1.y, z}, {q1.x, top, z}, {q0.x, top, z}, Wall, flip);
+                }
+                // The underside of the arch (seen from below), and a gold line along its nave edge.
+                quad(target, {p0.x, p0.y, naveZ}, {p1.x, p1.y, naveZ},
+                             {p1.x, p1.y, aisleZ}, {p0.x, p0.y, aisleZ}, Marble, side < 0);
+                rod(target, {p0.x, p0.y - 0.05f, naveZ - side * 0.1f},
+                            {p1.x, p1.y - 0.05f, naveZ - side * 0.1f}, 0.12f, Gold);
+            }
+        }
+        // The cornice on top, with a gold line along it.
+        box(target, {layout::firstColumnX, top - 0.4f, std::min(naveZ, aisleZ) - 0.4f},
+                    {layout::lastColumnX, top + 0.6f, std::max(naveZ, aisleZ) + 0.4f}, Marble);
+        rod(target, {layout::firstColumnX, top - 0.5f, naveZ - side * 0.45f},
+                    {layout::lastColumnX, top - 0.5f, naveZ - side * 0.45f}, 0.16f, Gold);
+    }
+}
 
 void chandelier(Vertices& v) {
-    rod(v, { 0, layout::vaultApex, 0 }, { 0, 40, 0 }, 0.12f);   // lesson 16: hangs from the new vault
+    rod(v, {0, layout::vaultApex, 0}, {0, 40, 0}, 0.12f);   // lesson 16: hangs from the new vault
     for (int tier = 0; tier < 2; ++tier) {
         const float y = 33.0f - tier * 5.0f, r = 7.5f - tier * 3.0f;
         // The ring, made of 96 short rods.
@@ -405,6 +456,13 @@ void Hall::build() {
     sideWall(v, -1);       // far wall: always drawn
     sideWall(front, 1);    // near wall: only with C (cutaway off)
     vault(v, front);   // lesson 16
+    arcade(v, front);  // lesson 17
+    // Lesson 17: a long banner in front of every arch, red and purple in turn.
+    for (int i = 0; i + 1 < layout::columnsPerSide; ++i) {
+        const Material cloth = i % 2 ? BannerPurple : BannerRed;
+        hangingBanner(v,     {bayCenterX(i) - 2.0f, 55.0f, -9.4f}, {4, 0, 0}, 26.0f, 2.5f, cloth);
+        hangingBanner(front, {bayCenterX(i) - 2.0f, 55.0f,  9.4f}, {4, 0, 0}, 26.0f, 2.5f, cloth);
+    }
     chandelier(v);
     throne(v);
     gate(v, bars);

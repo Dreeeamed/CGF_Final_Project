@@ -360,8 +360,7 @@ int main(int argc, char* argv[]) {
             freeCamera = !freeCamera;
             if (freeCamera) {
                 // Start inside the hall, above the 2.5D camera's spot, looking at what it looked at.
-                // Lesson 16: up to 66 m, to look at the ribs (the vault is 70 m high above z = 18).
-                freePos = glm::clamp(freePos, glm::vec3(-106, 1, -18), glm::vec3(106, 66, 18));
+                freePos = glm::vec3(cameraX, lookHeight + 12.0f, 16.0f);
                 const glm::vec3 look = glm::normalize(glm::vec3(cameraX, lookHeight, 0) - freePos);
                 freeYaw = std::atan2(look.x, -look.z);
                 freePitch = std::asin(look.y);
@@ -422,7 +421,8 @@ int main(int argc, char* argv[]) {
             const float speed = pressed(GLFW_KEY_LEFT_SHIFT) ? 30.0f : 10.0f;
             freePos += (forward * ahead + right * direction + glm::vec3(0, rise, 0)) * speed * dt;
             // Stay inside the hall: the walls have no outer side to look at.
-            freePos = glm::clamp(freePos, glm::vec3(-106, 1, -18), glm::vec3(106, 58, 18));
+            // Lesson 16: up to 66 m, to look at the ribs (the vault is 70 m high above z = 18).
+            freePos = glm::clamp(freePos, glm::vec3(-106, 1, -18), glm::vec3(106, 66, 18));
         } else if (insideHall) {
             float speed = pressed(GLFW_KEY_LEFT_SHIFT) ? 18.0f : 7.0f;
             if (gardenWalk > 0.0f) speed = 0.0f;   // walking through the gate: A/D do nothing

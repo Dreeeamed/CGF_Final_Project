@@ -24,7 +24,8 @@ uniform float gateLift;           // 0 = gate closed, 1 = fully raised
 
 // Material numbers, the same order as `enum Material` in hall_geometry.h.
 const int STONE = 0, FLOOR = 1, DARKNESS = 2, BANNER = 3, CARPET = 4, BRASS = 5,
-          FLAME = 6, WINDOW = 7, DOOR = 8, BEAM = 9, KNIGHT = 10, WALL = 11, GARDEN = 12, MARBLE = 13, GOLD = 14;
+          FLAME = 6, WINDOW = 7, DOOR = 8, BEAM = 9, KNIGHT = 10, WALL = 11, GARDEN = 12,
+          MARBLE = 13, GOLD = 14, BANNER_RED = 15, BANNER_PURPLE = 16;
 
 // ---------------------------------------------------------------------------
 // Wall axes
@@ -115,7 +116,6 @@ float parallaxShadow(vec2 uv, float hitDepth, vec3 lightTS, vec2 dx, vec2 dy) {
 // Other materials
 // ---------------------------------------------------------------------------
 
-
 // Lesson 16: marble veins from "value noise".
 // hash3: a pseudo-random number 0..1 for every whole-metre point of space.
 float hash3(vec3 p) {
@@ -141,6 +141,27 @@ float marbleVeins(vec3 p) {
     return pow(1.0 - stripes, 14.0) * 0.7 + pow(1.0 - stripes, 60.0) * 0.5;   // wide glow + sharp line
 }
 
+// Lesson 17: our own coat of arms on the long banners - a ring, a four-pointed star and
+// three crown points - plus gold borders. Returns 1 on gold, 0 on cloth.
+// Each shape is a "distance": below 0 inside the shape, above 0 outside. min() of two
+// distances is both shapes together. p is measured in banner widths from the sigil centre.
+float sigil(float width, float height) {
+    vec2 p = vec2((UV.x - 0.5) * width, (UV.y - 0.70) * height) / width;
+    float aa = 1.5 * fwidth(p.x);                            // a soft edge, about one pixel wide
+    float ring = abs(length(p) - 0.30) - 0.035;              // a circle line, radius 0.30
+    vec2 q = abs(p);                                         // the star is the same in all 4 quarters
+    float star = (min(q.x / 0.10 + q.y / 0.42, q.x / 0.42 + q.y / 0.10) - 1.0) * 0.08;
+    float crown = 1.0;
+    for (int i = -1; i <= 1; i++) {                          // three small spikes above the ring
+        vec2 c = p - vec2(float(i) * 0.17, 0.43 - 0.05 * abs(float(i)));
+        crown = min(crown, max(abs(c.x) * 2.6 + c.y, -c.y - 0.06) - 0.07);
+    }
+    float shape = min(min(ring, star), crown);
+    float edgeX = min(UV.x, 1.0 - UV.x) * width;             // metres from the nearest side edge
+    float border = step(edgeX, 0.22) + step(1.0 - UV.y, 0.012);
+    float line = step(abs(edgeX - 0.55), 0.05);              // a thin gold line inside the border
+    return clamp(1.0 - smoothstep(-aa, aa, shape) + border + line, 0.0, 1.0);
+}
 
 // Large, soft brightness variation of plain stone (triplanar: no UVs needed). Not POM.
 float stoneVariation(vec3 p, vec3 n) {
@@ -237,7 +258,7 @@ void shade() {
         base = wallColour;
         specularStrength = 0.15;
     }
-        if (Material == FLOOR) {
+    if (Material == FLOOR) {
         // Lesson 16: polished black marble slabs, 4 x 4 m, with thin gold lines between them.
         vec2 q = FragPos.xz / 4.0;                   // position in slabs
         vec2 f = fract(q);
@@ -257,6 +278,13 @@ void shade() {
         base = mix(vec3(0.04, 0.04, 0.05), vec3(0.32, 0.31, 0.30), marbleVeins(FragPos));
         specularStrength = 0.7;
         shininess = 90.0;
+    }
+    if (Material == BANNER_RED || Material == BANNER_PURPLE) {
+        // Lesson 17: long banners, deep red and royal purple, with the gold sigil.
+        vec3 cloth = Material == BANNER_RED ? vec3(0.34, 0.025, 0.045) : vec3(0.16, 0.035, 0.26);
+        float folds = 0.85 + 0.15 * sin(UV.x * 40.0);
+        base = mix(cloth * folds, vec3(0.78, 0.56, 0.22), sigil(4.0, 28.5));
+        specularStrength = 0.0;
     }
     if (Material == GOLD) {
         // Lesson 16: gold trims and ribs. Metal: the highlight takes the colour of the metal.

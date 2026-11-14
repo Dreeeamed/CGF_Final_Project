@@ -25,7 +25,7 @@ constexpr float rowZ = 12.0f;
 constexpr float galleryY = 24.0f;
 constexpr float gateHeight = 9.0f;
 constexpr float aisleWidth = 2.0f * (rowZ - columnRadius);
-//Lesson 16 the pointed vault starts on top of the side walls and rises 24 m more
+// Lesson 16: the pointed vault starts on top of the side walls and rises 24 m more.
 constexpr float vaultSpring = 60.0f;
 constexpr float vaultApex = 84.0f;
 static_assert(columnsPerSide > 1, "At least two columns define the repeated bays");
@@ -36,7 +36,7 @@ static_assert(archHalfWidth > 2.9f, "The high windows and their rims must fit in
 }
 
 enum Material { Stone, Floor, Darkness, Banner, Carpet, Brass, Flame, Window, Door, Beam, Knight, Wall,
-                Garden, Marble, Gold};
+                Garden, Marble, Gold, BannerRed, BannerPurple };
 
 struct Vertex {
     glm::vec3 position;
