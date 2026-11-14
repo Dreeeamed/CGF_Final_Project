@@ -14,6 +14,12 @@ const int CURB = 3;
 const int BARK = 4;
 const int LEAF = 5;
 const int LEAF_VIOLET = 6;
+const int SOIL = 7;
+const int STEM = 8;
+const int PETAL_LAVENDER = 9;
+const int PETAL_WHITE = 10;
+const int FLOWER_HEART = 11;
+const int HEDGE = 12;
 
 // Garden palette (hex design targets / 255).
 const vec3 mossColour  = vec3(0.188, 0.302, 0.325);  // #304D53 desaturated teal
@@ -23,6 +29,10 @@ const vec3 goldColour  = vec3(0.773, 0.631, 0.420);  // #C5A16B antique gold
 const vec3 barkColour  = vec3(0.105, 0.110, 0.150);  // near-black blue bark
 const vec3 leafColour  = vec3(0.220, 0.360, 0.380);  // #304D53 teal, a little lighter
 const vec3 violetColour = vec3(0.545, 0.439, 0.780); // #8B70C7 soft violet accent
+const vec3 lavenderColour = vec3(0.722, 0.663, 0.910); // #B8A9E8 pale lavender (glowing flowers)
+const vec3 paleColour  = vec3(0.780, 0.820, 0.900);  // bluish white petals
+const vec3 soilColour  = vec3(0.070, 0.075, 0.090);  // almost black earth
+const vec3 hedgeColour = vec3(0.120, 0.215, 0.230);  // darker, clipped teal
 const vec3 fogColour   = vec3(0.043, 0.063, 0.125);  // #0B1020 midnight navy
 
 void main() {
@@ -44,7 +54,13 @@ void main() {
         base = barkColour * (0.8 + 0.2 * sin(UV.x * 6.2832 * 7.0));
     }
     if (Material == LEAF) base = leafColour;
-    if (Material == LEAF_VIOLET) base = violetColour * 0.75;
+    if (Material == LEAF_VIOLET) base = violetColour * 0.6;
+    if (Material == SOIL) base = soilColour;
+    if (Material == STEM) base = leafColour * 0.6;
+    if (Material == PETAL_LAVENDER) base = lavenderColour;
+    if (Material == PETAL_WHITE) base = paleColour;
+    if (Material == FLOWER_HEART) base = goldColour;
+    if (Material == HEDGE) base = hedgeColour;
 
     // Temporary lighting until Phase 7: low cool ambient + one moonlight direction
     // (Lambert diffuse, L-5-2 Shading). Enough to tell the faces of a box apart.
@@ -52,6 +68,9 @@ void main() {
     vec3 moonDir = normalize(vec3(-0.4, 0.8, 0.45));
     float diffuse = max(dot(n, moonDir), 0.0);
     vec3 colour = base * (vec3(0.30, 0.34, 0.45) + vec3(0.70, 0.75, 0.90) * diffuse);
+    // Magical flowers give a little light of their own (emission): it is added on top
+    // of the reflected light, so they stay visible even on their dark side.
+    if (Material == PETAL_LAVENDER) colour += lavenderColour * 0.35;
 
     // Depth fog: the farther a point lies behind the walking line (-Z), the more navy.
     float fog = clamp(-FragPos.z / 40.0, 0.0, 0.6);

@@ -322,7 +322,7 @@ int main(int argc, char* argv[]) {
              keyTab{GLFW_KEY_TAB}, keyE{GLFW_KEY_E}, keyG{GLFW_KEY_G};
     const char* captures[] = {"hall-centre.ppm", "hall-overview.ppm", "hall-entrance.ppm",
                               "hall-throne.ppm", "hall-full-row.ppm", "exterior.ppm",
-                              "hall-closeup.ppm", "hall-garden.ppm", "garden.ppm"};
+                              "hall-closeup.ppm", "hall-garden.ppm", "garden.ppm", "garden-flowers.ppm"};
     std::cout << consoleHelp;
 
     while (!glfwWindowShouldClose(window)) {
@@ -488,8 +488,11 @@ int main(int argc, char* argv[]) {
                     cameraX = -92; knightX = -100; distance = 30; lookHeight = 6;
                     hasKey = true; gateLift = 1.0f; inGarden = true; gardenWalk = 0.6f;
                 }
-                if (renderedFrames == 8) {   // through the gate: the garden scene
+                if (renderedFrames >= 8) {   // through the gate: the garden scene
                     knightX = gateX; hasKey = true; gateLift = 1.0f; inGarden = true; gardenWalk = 1.0f;
+                }
+                if (renderedFrames == 9) {   // the flower garden, a little closer
+                    gardenCameraX = royal_garden::layout::flowerBranchX; gardenDistance = 16.0f;
                 }
             } else {
                 if (renderedFrames == 1) showForeground = true;
@@ -624,7 +627,7 @@ int main(int argc, char* argv[]) {
             if (error != GL_NO_ERROR) {
                 std::cerr << "OpenGL smoke test failed: " << error << '\n'; exitCode = 1; break;
             }
-            if (++renderedFrames == (capture ? 9 : 4)) {
+            if (++renderedFrames == (capture ? 10 : 4)) {
                 std::cout << "Smoke test passed: " << renderedFrames << " frames rendered.\n";
                 break;
             }

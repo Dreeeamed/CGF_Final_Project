@@ -38,6 +38,8 @@ target_link_libraries(glad PRIVATE ${CMAKE_DL_LIBS})
 add_executable(simple_castle
     src/main.cpp
     src/castle_geometry.cpp
+    src/garden_plants.cpp
+    src/garden_primitives.cpp
     src/garden_scene.cpp
     src/hall_geometry.cpp
     src/material.cpp
