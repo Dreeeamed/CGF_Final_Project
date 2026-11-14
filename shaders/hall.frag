@@ -24,7 +24,7 @@ uniform float gateLift;           // 0 = gate closed, 1 = fully raised
 
 // Material numbers, the same order as `enum Material` in hall_geometry.h.
 const int STONE = 0, FLOOR = 1, DARKNESS = 2, BANNER = 3, CARPET = 4, BRASS = 5,
-          FLAME = 6, WINDOW = 7, DOOR = 8, BEAM = 9, KNIGHT = 10, WALL = 11, GARDEN = 12;
+          FLAME = 6, WINDOW = 7, DOOR = 8, BEAM = 9, KNIGHT = 10, WALL = 11, GARDEN = 12, MARBLE = 13, GOLD = 14;
 
 // ---------------------------------------------------------------------------
 // Wall axes
@@ -115,6 +115,33 @@ float parallaxShadow(vec2 uv, float hitDepth, vec3 lightTS, vec2 dx, vec2 dy) {
 // Other materials
 // ---------------------------------------------------------------------------
 
+
+// Lesson 16: marble veins from "value noise".
+// hash3: a pseudo-random number 0..1 for every whole-metre point of space.
+float hash3(vec3 p) {
+    return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+}
+
+// noise3: the 8 random numbers at the corners of the 1 m cube around p, blended smoothly.
+// The result changes softly through space, like clouds (not like TV static).
+float noise3(vec3 p) {
+    vec3 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);   // smooth step between the corners
+    return mix(mix(mix(hash3(i),                  hash3(i + vec3(1, 0, 0)), f.x),
+                   mix(hash3(i + vec3(0, 1, 0)),  hash3(i + vec3(1, 1, 0)), f.x), f.y),
+               mix(mix(hash3(i + vec3(0, 0, 1)),  hash3(i + vec3(1, 0, 1)), f.x),
+                   mix(hash3(i + vec3(0, 1, 1)),  hash3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+
+// Thin pale veins: stripes of sin(), bent by noise of three sizes.
+// 1.0 on a vein, 0.0 on the dark stone between them.
+float marbleVeins(vec3 p) {
+    float bend = noise3(p * 0.35) * 0.6 + noise3(p * 0.9) * 0.3 + noise3(p * 2.3) * 0.1;
+    float stripes = abs(sin(p.x * 0.55 + p.y * 0.8 + p.z * 0.45 + bend * 7.0));
+    return pow(1.0 - stripes, 14.0) * 0.7 + pow(1.0 - stripes, 60.0) * 0.5;   // wide glow + sharp line
+}
+
+
 // Large, soft brightness variation of plain stone (triplanar: no UVs needed). Not POM.
 float stoneVariation(vec3 p, vec3 n) {
     vec3 weights = pow(abs(n), vec3(4.0));
@@ -204,22 +231,39 @@ void shade() {
     float variation = stoneVariation(FragPos, n);
     vec3 base = vec3(0.31, 0.40, 0.53) * variation;   // plain stone: columns, frames, galleries
     float specularStrength = 0.07;
+    float shininess = 40.0;                          // lesson 16: bigger = smaller, sharper highlight
+    vec3 specularColour = vec3(0.40, 0.52, 0.67);    // lesson 16: cool moonlight; gold reflects warm
     if (Material == WALL) {
         base = wallColour;
         specularStrength = 0.15;
     }
-    if (Material == FLOOR) {
-        // Large quartz-grey slabs, with subtle joints in world metres.
-        vec2 q = FragPos.xz / 3.0;
+        if (Material == FLOOR) {
+        // Lesson 16: polished black marble slabs, 4 x 4 m, with thin gold lines between them.
+        vec2 q = FragPos.xz / 4.0;                   // position in slabs
         vec2 f = fract(q);
-        vec2 edge = min(f, 1.0 - f);
-        vec2 aa = max(fwidth(q), vec2(0.0001));
-        float joint = min(smoothstep(vec2(0.008), vec2(0.008) + aa, edge).x,
-                          smoothstep(vec2(0.008), vec2(0.008) + aa, edge).y);
-        float checker = mod(floor(q.x) + floor(q.y), 2.0);
-        base = mix(vec3(0.12, 0.15, 0.20), vec3(0.27, 0.33, 0.41) * (0.96 + checker * 0.04), joint);
-        base *= 0.93 + 0.07 * variation;
-        specularStrength = 0.18;
+        vec2 edge = min(f, 1.0 - f);                 // distance to the nearest joint
+        vec2 aa = max(fwidth(q), vec2(0.0001));      // one pixel, measured in slabs: soft, no flicker
+        float slab = min(smoothstep(vec2(0.008), vec2(0.008) + aa, edge).x,
+                         smoothstep(vec2(0.008), vec2(0.008) + aa, edge).y);   // 0 on a joint
+        float checker = mod(floor(q.x) + floor(q.y), 2.0);   // every other slab a little lighter
+        vec3 marble = mix(vec3(0.035, 0.035, 0.045), vec3(0.20, 0.19, 0.18),
+                          checker * 0.25 + marbleVeins(FragPos) * 0.6);
+        base = mix(vec3(0.62, 0.45, 0.17), marble, slab);
+        specularStrength = 0.5;
+        shininess = 120.0;
+    }
+    if (Material == MARBLE) {
+        // Lesson 16: polished black marble with pale veins (columns).
+        base = mix(vec3(0.04, 0.04, 0.05), vec3(0.32, 0.31, 0.30), marbleVeins(FragPos));
+        specularStrength = 0.7;
+        shininess = 90.0;
+    }
+    if (Material == GOLD) {
+        // Lesson 16: gold trims and ribs. Metal: the highlight takes the colour of the metal.
+        base = vec3(0.62, 0.45, 0.17);
+        specularStrength = 1.0;
+        shininess = 60.0;
+        specularColour = vec3(1.0, 0.80, 0.45);
     }
     if (Material == BANNER) {
         // Dark red cloth with a gold border and a gold crest.
@@ -269,8 +313,8 @@ void shade() {
     float diffuse = max(dot(n, keyDir), 0.0) * wallShadow;       // Lambert, darkened by POM shadow
     float rim = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0) * 0.10;   // thin light on the edges
     vec3 colour = base * (vec3(0.14, 0.17, 0.24) + vec3(1.10, 1.12, 1.18) * diffuse + rim);
-    float spec = pow(max(dot(n, normalize(keyDir + viewDir)), 0.0), 40.0) * wallShadow;   // Blinn-Phong
-    colour += vec3(0.40, 0.52, 0.67) * spec * specularStrength;
+    float spec = pow(max(dot(n, normalize(keyDir + viewDir)), 0.0), shininess) * wallShadow;   // Blinn-Phong
+    colour += specularColour * spec * specularStrength;
 
     // A warm local pool below the chandelier, against the cool high windows.
     vec3 toLamp = vec3(0, 31, 0) - FragPos;

@@ -102,19 +102,20 @@ void rod(Vertices& v, glm::vec3 a, glm::vec3 b, float radius, Material m = Brass
 // Parts of the hall
 // ---------------------------------------------------------------------------
 
+//Lesson 16: a black marble shaft with gold trims.
 void column(Vertices& v, float x, float z) {
-    // All horizontal radii shrink together; the supporting height stays at 44 m.
+    //All horizontal radii shrink together; the supporting height stays at 44m
     const float radius = layout::columnRadius;
     const float baseRadius = layout::columnBaseRadius;
     const float collarRadius = layout::columnCollarRadius;
-    cylinder(v, {x, 0, z},     0.7f,  baseRadius, baseRadius);   // plinth
-    cylinder(v, {x, 0.7f, z},  0.7f,  baseRadius, radius);       // base moulding
-    cylinder(v, {x, 1.4f, z},  40.4f, radius, radius);           // shaft
-    cylinder(v, {x, 41.8f, z}, 1.4f,  radius, baseRadius);       // capital
-    cylinder(v, {x, 43.2f, z}, 0.8f,  baseRadius, baseRadius);   // abacus
-    // Narrow collars divide the huge vertical silhouette.
-    cylinder(v, {x, 10, z}, 0.35f, collarRadius, collarRadius);
-    cylinder(v, {x, 31, z}, 0.35f, collarRadius, collarRadius);
+    cylinder(v, {x,0,z}, 0.7f, baseRadius, baseRadius, Gold);   // plinth
+    cylinder(v, {x,0.7f, z}, 0.7f, baseRadius, radius, Gold);       // base moulding
+    cylinder(v, {x,1.4f,z }, 40.4f, radius, radius, Marble);//shaft
+    cylinder(v, {x,41.8f,z }, 1.4f, radius, baseRadius, Gold);//capital
+    cylinder(v, {x,43.2f,z}, 0.8f, baseRadius, baseRadius, Gold);//abacus
+    // Narrow gold collars divide the huge vertical silhouette.
+    cylinder(v, {x,10,z}, 0.35f, collarRadius, collarRadius, Gold);
+    cylinder(v, {x,31,z}, 0.35f, collarRadius, collarRadius, Gold);
 }
 
 // A pointed arch with a real six-metre recess behind it. Only its far end is dark.
@@ -238,34 +239,56 @@ void sideWall(Vertices& v, int side) {
     }
 }
 
-void roof(Vertices& v, Vertices& foreground) {
-    // Keep the spring above the clerestory windows (their tops are at 55 m).
-    // This shallow barrel vault reaches exactly 60 m at the centre.
-    for (int side : {-1, 1}) {
-        // Like the side walls, the near half (side = +1) belongs to the cutaway foreground.
-        Vertices& target = side < 0 ? v : foreground;
-        for (int i = 0; i < 48; ++i) {
-            const float t0 = i / 48.0f, t1 = (i + 1) / 48.0f;
-            const float z0 = side * 20 * (1 - t0 * t0), z1 = side * 20 * (1 - t1 * t1);
-            const float y0 = 56 + 4 * t0, y1 = 56 + 4 * t1;
-            // One strip of the vault. Written for the far half, so the near half flips it.
-            quad(target, {-108, y0, z0}, {108, y0, z0}, {108, y1, z1}, {-108, y1, z1}, Stone, side > 0);
-            // End walls close both ends of the hall. Their top follows the vault curve,
-            // so they never stick out above the roof. Two mirrors here: x and side.
-            for (float x : {-108.0f, 108.0f})
-                quad(target, {x, 0, z0}, {x, 0, z1}, {x, y1, z1}, {x, y0, z0}, Wall, x * side > 0);
-            // Brass ribs under the vault, above every column.
-            for (int col = 0; col < layout::columnsPerSide; ++col) {
-                const float x = columnX(col);
-                quad(target, {x - 0.5f, y0 - 0.35f, z0}, {x + 0.5f, y0 - 0.35f, z0},
-                             {x + 0.5f, y1 - 0.35f, z1}, {x - 0.5f, y1 - 0.35f, z1}, Brass, side > 0);
-            }
-        }
-    }
+// Lesson 16: height of the pointed (gothic) vault above the point z across the hall.
+// Two circle arcs meet at the top in a point. The arc that starts at the far wall
+// (z = -20) has its centre on the other side of the middle, at z = +c, and the other
+// way round: that is why they meet at an angle instead of making one round curve.
+
+float vaultY(float z) {
+    const float a = layout::width * 0.5f;//20m half of the width
+    const float h = layout::vaultApex - layout::vaultSpring;//24m: how high the vault rises
+    const float c = (h * h - a * a) / (2.0f * a);//4.4m the center past the middle
+	const float r = c + a;//24.4m radius of each arc
+    const float d = std::abs(z) + c;//across distance to that center
+	return layout::vaultSpring + std::sqrt(std::max(r * r - d * d, 0.0f));//circle y^2 = r^2 - d^2
 }
 
+// Lesson 16: the vault in 1 m strips across the hall, the two end walls below it,
+// and gold ribs: one arc over every column and two diagonals crossing in every bay.
+// The far half (z < 0) is always drawn; the near half belongs to the cutaway foreground.
+void vault(Vertices& v, Vertices& foreground) {
+    constexpr int strips = 40;
+    auto rib = [](float x, float z) { return glm::vec3(x, vaultY(z) - 0.35f, z); };   // just under the stone
+    for (int i = 0; i < strips; ++i) {
+        const float z0 = -20.0f + i, z1 = z0 + 1.0f;
+        const float y0 = vaultY(z0), y1 = vaultY(z1);
+        Vertices& target = z1 <= 0.0f ? v : foreground;
+        // z grows across the WHOLE hall here, so one corner order faces down on both halves.
+        quad(target, { -108, y0, z0 }, { 108, y0, z0 }, { 108, y1, z1 }, { -108, y1, z1 }, Stone);
+        // The end walls under this strip (POM stone). The wall at x = -108 looks the other way.
+        for (float x : {-108.0f, 108.0f})
+            quad(target, { x, 0, z0 }, { x, 0, z1 }, { x, y1, z1 }, { x, y0, z0 }, Wall, x < 0);
+        // This strip's piece of every rib.
+        const float t0 = float(i) / strips, t1 = float(i + 1) / strips;
+        for (int col = 0; col < layout::columnsPerSide; ++col)
+            rod(target, rib(columnX(col), z0), rib(columnX(col), z1), 0.38f, Gold);
+        for (int bay = 0; bay + 1 < layout::columnsPerSide; ++bay) {
+            const float xa = columnX(bay), xb = columnX(bay + 1);
+            rod(target, rib(xa + (xb - xa) * t0, z0), rib(xa + (xb - xa) * t1, z1), 0.22f, Gold);
+            rod(target, rib(xb + (xa - xb) * t0, z0), rib(xb + (xa - xb) * t1, z1), 0.22f, Gold);
+        }
+    }
+    // The ridge rib along the top, and a gold boss where the diagonals cross.
+    rod(v, { -108, layout::vaultApex - 0.45f, 0 }, { 108, layout::vaultApex - 0.45f, 0 }, 0.42f, Gold);
+    for (int bay = 0; bay + 1 < layout::columnsPerSide; ++bay)
+        cylinder(v, { bayCenterX(bay), layout::vaultApex - 2.2f, 0 }, 1.6f, 0.4f, 1.1f, Gold, 16);
+}
+
+
+
+
 void chandelier(Vertices& v) {
-    rod(v, {0, 59.8f, 0}, {0, 40, 0}, 0.12f);
+    rod(v, { 0, layout::vaultApex, 0 }, { 0, 40, 0 }, 0.12f);   // lesson 16: hangs from the new vault
     for (int tier = 0; tier < 2; ++tier) {
         const float y = 33.0f - tier * 5.0f, r = 7.5f - tier * 3.0f;
         // The ring, made of 96 short rods.
@@ -381,7 +404,7 @@ void Hall::build() {
     box(v, {-106, 0.025f, -3}, {88, 0.055f, 3}, Carpet);
     sideWall(v, -1);       // far wall: always drawn
     sideWall(front, 1);    // near wall: only with C (cutaway off)
-    roof(v, front);
+    vault(v, front);   // lesson 16
     chandelier(v);
     throne(v);
     gate(v, bars);
