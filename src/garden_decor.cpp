@@ -54,4 +54,46 @@ void bench(Vertices& v, const glm::mat4& instance) {
 
     place(v, b, instance);
 }
+
+// The lantern is a small hierarchy: post frame -> head frame -> cage, flame, roof.
+//
+//   base (octagonal stone foot) and iron post with a gold collar
+//   head = T(0, postHeight, 0)
+//     |- bottom plate, 4 corner bars (the cage), glowing core
+//     |- roof = head * T(0, cageHeight, 0): pyramid + gold ball
+void lantern(Vertices& v, const glm::mat4& instance) {
+    Vertices l;   // the whole lantern, in local coordinates
+    const float postHeight = 2.0f, cageHeight = 0.45f, half = 0.16f;
+
+    prism(l, {0, 0, 0}, 0.22f, 0.25f, 8, Marble);      // stone foot
+    Vertices part;
+    cylinder(part, postHeight, 0.07f, 0.05f, 10, Iron);
+    place(l, part, T(0, 0.25f, 0));
+    part.clear();
+    cylinder(part, 0.05f, 0.09f, 0.09f, 10, Gold);
+    place(l, part, T(0, 1.2f, 0));
+
+    const glm::mat4 head = T(0, 0.25f + postHeight, 0);
+    part.clear();
+    box(part, {-half - 0.03f, 0, -half - 0.03f}, {half + 0.03f, 0.04f, half + 0.03f}, Iron);
+    for (float sx : {-1.0f, 1.0f})                     // the 4 corner bars of the cage
+        for (float sz : {-1.0f, 1.0f})
+            box(part, {sx * half - 0.02f, 0.04f, sz * half - 0.02f},
+                      {sx * half + 0.02f, cageHeight, sz * half + 0.02f}, Iron);
+    // The flame: a glowing core inside the cage. It gives off warm light (emission),
+    // and the team's bloom turns that into a soft halo.
+    box(part, {-half + 0.03f, 0.08f, -half + 0.03f}, {half - 0.03f, cageHeight - 0.04f, half - 0.03f},
+        LanternGlow);
+    place(l, part, head);
+
+    const glm::mat4 roof = head * T(0, cageHeight, 0);
+    part.clear();
+    cylinder(part, 0.3f, 0.27f, 0.01f, 4, Iron);       // a square pyramid roof ...
+    place(l, part, roof * RotY(45.0f));                 // ... turned to sit square on the cage
+    part.clear();
+    sphere(part, 1.0f, 4, 6, Gold);
+    place(l, part, roof * T(0, 0.32f, 0) * S(0.05f));
+
+    place(v, l, instance);
+}
 }

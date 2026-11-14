@@ -23,6 +23,8 @@ const int HEDGE = 12;
 const int MARBLE = 13;
 const int WATER = 14;
 const int CRYSTAL = 15;
+const int IRON = 16;
+const int LANTERN_GLOW = 17;
 
 uniform float time;   // seconds; set by main.cpp (0 in the smoke test)
 // The fountain's centre in the world: (layout::fountainX, layout::plazaZ).
@@ -42,6 +44,8 @@ const vec3 soilColour  = vec3(0.070, 0.075, 0.090);  // almost black earth
 const vec3 hedgeColour = vec3(0.120, 0.215, 0.230);  // darker, clipped teal
 const vec3 marbleColour = vec3(0.330, 0.370, 0.470); // pale blue-grey: the fountain stands out
 const vec3 waterColour = vec3(0.392, 0.608, 0.682);  // #649BAE muted cyan
+const vec3 ironColour  = vec3(0.060, 0.065, 0.085);  // blackened iron
+const vec3 flameColour = vec3(1.000, 0.700, 0.330);  // warm lantern light, near #C5A16B
 const vec3 fogColour   = vec3(0.043, 0.063, 0.125);  // #0B1020 midnight navy
 
 void main() {
@@ -73,6 +77,8 @@ void main() {
     if (Material == MARBLE) base = marbleColour;
     if (Material == WATER) base = waterColour * 0.55;
     if (Material == CRYSTAL) base = violetColour;
+    if (Material == IRON) base = ironColour;
+    if (Material == LANTERN_GLOW) base = flameColour;
 
     // Temporary lighting until Phase 7: low cool ambient + one moonlight direction
     // (Lambert diffuse, L-5-2 Shading). Enough to tell the faces of a box apart.
@@ -94,6 +100,11 @@ void main() {
     }
     // The crystal glows: strong emission, so the team's bloom makes a soft halo.
     if (Material == CRYSTAL) colour += violetColour * 1.6;
+    // Lantern flames: strong warm emission with a gentle flicker. The phase depends on
+    // the position, so neighbouring lanterns do not flicker in step.
+    if (Material == LANTERN_GLOW)
+        colour += flameColour * (1.8 + 0.15 * sin(time * 9.0 + FragPos.x * 3.0)
+                                     + 0.1 * sin(time * 23.0 + FragPos.z));
     // Magical flowers give a little light of their own (emission): it is added on top
     // of the reflected light, so they stay visible even on their dark side.
     if (Material == PETAL_LAVENDER) colour += lavenderColour * 0.35;

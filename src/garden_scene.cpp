@@ -162,6 +162,18 @@ bool Garden::build() {
     bench(v, T(bxE, seatY, layout::benchAreaBackZ + 0.7f));
     bench(v, T(bxE - bh + 0.7f, seatY, -10.8f) * RotY(90.0f));
     bench(v, T(bxE + bh - 0.7f, seatY, -10.8f) * RotY(-90.0f));
+    // Two lanterns at the front corners of the resting area.
+    lantern(v, T(bxE - bh + 0.4f, seatY, layout::benchBranchEnd - 0.2f));
+    lantern(v, T(bxE + bh - 0.4f, seatY, layout::benchBranchEnd - 0.2f));
+
+    // Lanterns along the back edge of the main path: a pair guarding every side path
+    // (like a gateway), and single ones keeping a rhythm on the long stretches.
+    const float lanternZ = -(layout::pathHalfWidth + 0.6f);
+    for (float bx : layout::branchX)
+        for (float side : {-1.0f, 1.0f})
+            lantern(v, T(bx + side * (layout::branchHalfWidth + 1.1f), 0, lanternZ));
+    for (float lx : {-50.0f, -40.0f, 10.0f, 35.0f, 48.0f})
+        lantern(v, T(lx, 0, lanternZ));
 
     // The back wall of the garden: a tall hedge across the whole strip.
     kit.hedge(green, {layout::startX, layout::backHedgeZ}, {layout::endX, layout::backHedgeZ}, 2.6f, 1.4f);
