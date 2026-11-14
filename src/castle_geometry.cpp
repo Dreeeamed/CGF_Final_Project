@@ -1,3 +1,5 @@
+// Geometry of the facade (F1): a walkway, a wall with a pointed gate arch, two towers
+// and a short pillared hall behind the arch. Units: one texture tile = 2 world units.
 #include "castle_geometry.h"
 #include <glm/glm.hpp>
 #include <vector>
@@ -24,10 +26,13 @@ void addQuad(std::vector<Vertex>& vertices,
     vertices.push_back({c, normal, {repeatU, repeatV}});
     vertices.push_back({d, normal, {0.0f,    repeatV}});
 }
+
+// One face of the arch. The mirrored (right) half walks the corners backwards,
+// so its front still looks outwards. UVs come from the world position.
 void addArchFace(std::vector<Vertex>& vertices,
-    glm::vec3 a, glm::vec3 b,
-    glm::vec3 c, glm::vec3 d,
-    bool mirrored, bool depthFace = false) {
+                 glm::vec3 a, glm::vec3 b,
+                 glm::vec3 c, glm::vec3 d,
+                 bool mirrored, bool depthFace = false) {
     const std::size_t first = vertices.size();
 
     if (mirrored) {
@@ -48,6 +53,7 @@ void addArchFace(std::vector<Vertex>& vertices,
         }
     }
 }
+
 // A box is defined by two opposite corners: minimum and maximum X, Y, Z.
 // One texture tile spans two world units on every face.
 void addBox(std::vector<Vertex>& vertices, glm::vec3 minimum, glm::vec3 maximum) {
@@ -90,7 +96,6 @@ void addBox(std::vector<Vertex>& vertices, glm::vec3 minimum, glm::vec3 maximum)
         {minimum.x, minimum.y, minimum.z}, {maximum.x, minimum.y, minimum.z},
         {maximum.x, minimum.y, maximum.z}, {minimum.x, minimum.y, maximum.z},
         repeatX, repeatZ);
-
 }
 } // namespace
 
@@ -104,14 +109,12 @@ void CastleGeometry::build() {
     const float archThickness = 0.6f;
     const int archSegments = 32;
 
-
     // 1. Walkway: its top is at Y = 0, with a visible front edge.
     addBox(vertices, { -12.0f, -0.8f, -4.0f }, { 12.0f, 0.0f, 2.0f });
 
     // 2. Facade: two walls and a lintel leave a real opening in the middle.
     addBox(vertices, { -8.5f, 0.0f, -1.0f }, { -gateHalfWidth, wallHeight, 0.0f });
     addBox(vertices, { gateHalfWidth, 0.0f, -1.0f }, { 8.5f, wallHeight, 0.0f });
-
 
     // 3. Towers stand slightly closer to the camera than the facade.
     addBox(vertices, { -10.5f, 0.0f, -1.4f }, { -8.5f, towerHeight, 0.8f });
@@ -123,6 +126,7 @@ void CastleGeometry::build() {
     addBox(vertices, { 8.3f, towerHeight - 0.35f, -1.6f },
         { 10.7f, towerHeight + 0.2f, 1.0f });
 
+    // 5. Straight sides of the stone frame around the gate.
     addBox(vertices,
         { -gateHalfWidth - archThickness, 0.0f, 0.0f },
         { -gateHalfWidth, gateHeight, 0.5f });
@@ -131,10 +135,11 @@ void CastleGeometry::build() {
         { gateHalfWidth, 0.0f, 0.0f },
         { gateHalfWidth + archThickness, gateHeight, 0.5f });
 
+    // 6. The pointed arch, in 32 slices per half. atZ() moves a point to another depth.
     auto atZ = [](glm::vec3 p, float z) {
         p.z = z;
         return p;
-        };
+    };
 
     for (int side : {-1, 1}) {
         const bool mirrored = side == 1;
@@ -166,29 +171,29 @@ void CastleGeometry::build() {
             glm::vec3 top0(inner0.x, wallHeight, 0.0f);
             glm::vec3 top1(inner1.x, wallHeight, 0.0f);
 
-            // Передняя поверхность каменного обрамления.
+            // Front of the stone frame.
             addArchFace(vertices,
                 outer0, inner0, inner1, outer1,
                 mirrored);
 
-            // Стена над проходом: заполняет прежние просветы.
+            // Wall above the opening.
             addArchFace(vertices,
                 atZ(inner0, 0.0f), atZ(inner1, 0.0f), top1, top0,
                 mirrored);
 
-            // Задняя поверхность стены.
+            // Back of the wall.
             addArchFace(vertices,
                 atZ(top0, -1.0f), atZ(top1, -1.0f),
                 atZ(inner1, -1.0f), atZ(inner0, -1.0f),
                 mirrored);
 
-            // Внутренняя поверхность проёма: его глубина.
+            // Inside of the opening: its depth.
             addArchFace(vertices,
                 inner0, atZ(inner0, -1.0f),
                 atZ(inner1, -1.0f), inner1,
                 mirrored, true);
 
-            // Наружный край выступающего обрамления.
+            // Outer edge of the projecting frame.
             addArchFace(vertices,
                 outer0, outer1,
                 atZ(outer1, 0.0f), atZ(outer0, 0.0f),
@@ -196,18 +201,17 @@ void CastleGeometry::build() {
         }
     }
 
-    // Верхняя поверхность центральной части стены.
+    // 7. Top of the wall above the gate.
     addQuad(vertices,
         { -gateHalfWidth, wallHeight, 0.0f },
         { gateHalfWidth, wallHeight, 0.0f },
         { gateHalfWidth, wallHeight, -1.0f },
         { -gateHalfWidth, wallHeight, -1.0f },
         gateHalfWidth, 0.5f);
-    //HallFloor
+    // 8. The short hall behind the arch: floor, side walls, far wall, pillars.
     addBox(vertices,
         { -5.5f, -0.8f, -36.0f },
         { 5.5f,  0.0f,  -4.0f });
-    //HallWalls
     // Left wall.
     addBox(vertices,
         { -5.5f, 0.0f, -36.0f },
@@ -217,11 +221,11 @@ void CastleGeometry::build() {
     addBox(vertices,
         { 5.0f, 0.0f, -36.0f },
         { 5.5f, 14.0f, -4.0f });
-    //distantWall
+    // Far wall.
     addBox(vertices,
         { -5.5f,0.0f,-36.5f },
         { 5.5f,  14.0f,  -36.0f });
-    //four pair of tall stone pillars
+    // Four pairs of tall stone pillars.
     for (int row = 0; row < 4; ++row) {
         float z = -6.0f - row * 7.0f;
 
@@ -244,6 +248,8 @@ void CastleGeometry::build() {
                 { x + 0.5f, 11.0f, z + 0.5f });
         }
     }
+
+    // Upload to the graphics card: position, normal, uv (shader inputs 0, 1, 2).
     vertexCount = static_cast<GLsizei>(vertices.size());
 
     glGenVertexArrays(1, &vao);
@@ -277,5 +283,3 @@ void CastleGeometry::destroy() {
     vbo = vao = 0;
     vertexCount = 0;
 }
-
-// Next: a pointed arch, an interior behind the opening and final stone materials.

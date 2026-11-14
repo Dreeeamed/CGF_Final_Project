@@ -38,5 +38,5 @@ void main() {
     vec3 fogColor = vec3(0.055, 0.085, 0.14);
     vec3 finalColor = mix(litColor, fogColor, fogAmount);
 
-    FragColor = vec4(finalColor, 1.0);
+    FragColor = vec4(pow(finalColor, vec3(2.2)), 1.0);   // lesson 15: light energy, like hall.frag
 }

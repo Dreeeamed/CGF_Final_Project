@@ -44,5 +44,8 @@ void main() {
     // Depth fog: the farther a point lies behind the walking line (-Z), the more navy.
     float fog = clamp(-FragPos.z / 40.0, 0.0, 0.6);
     colour = mix(colour, fogColour, fog);
-    FragColor = vec4(colour, 1.0);
+    // Our palette is picked by eye on the monitor ("gamma-encoded"). The team's HDR
+    // pipeline adds light as energy, so decode to linear here, like hall.frag does;
+    // post.frag encodes back for the monitor at the very end.
+    FragColor = vec4(pow(colour, vec3(2.2)), 1.0);
 }

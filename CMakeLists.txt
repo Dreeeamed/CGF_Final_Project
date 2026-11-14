@@ -41,6 +41,8 @@ add_executable(simple_castle
     src/garden_scene.cpp
     src/hall_geometry.cpp
     src/material.cpp
+    src/hud.cpp
+    src/post.cpp
 )
 target_include_directories(simple_castle PRIVATE src third_party/stb)
 target_link_libraries(simple_castle PRIVATE glfw glad::glad glm::glm)

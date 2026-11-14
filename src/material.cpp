@@ -101,4 +101,3 @@ GLuint loadTexture2D(const char* path) {
     glBindTexture(GL_TEXTURE_2D, 0);
     return texture;
 }
-// TODO for final: use the height map for parallax occlusion mapping.
