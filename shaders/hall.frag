@@ -25,7 +25,8 @@ uniform float gateLift;           // 0 = gate closed, 1 = fully raised
 // Material numbers, the same order as `enum Material` in hall_geometry.h.
 const int STONE = 0, FLOOR = 1, DARKNESS = 2, BANNER = 3, CARPET = 4, BRASS = 5,
           FLAME = 6, WINDOW = 7, DOOR = 8, BEAM = 9, KNIGHT = 10, WALL = 11, GARDEN = 12,
-          MARBLE = 13, GOLD = 14, BANNER_RED = 15, BANNER_PURPLE = 16, CRYSTAL = 17;
+          MARBLE = 13, GOLD = 14, BANNER_RED = 15, BANNER_PURPLE = 16, CRYSTAL = 17,
+          MAGIC = 18, BANNER_GIANT = 19;
 
 // ---------------------------------------------------------------------------
 // Wall axes
@@ -163,6 +164,31 @@ float sigil(float width, float height) {
     return clamp(1.0 - smoothstep(-aa, aa, shape) + border + line, 0.0, 1.0);
 }
 
+// Lesson 19: 1 on a line of the given half width, 0 away from it, soft over one pixel (aa).
+float softLine(float distance, float halfWidth, float aa) {
+    return 1.0 - smoothstep(halfWidth, halfWidth + aa, abs(distance));
+}
+
+// Lesson 19: the magic circle on the floor in front of the stairs (centre x = 56):
+// two rings, a band of rune dashes and a five-pointed star. 1 on a line, 0 elsewhere.
+float magicCircle(vec3 p) {
+    vec2 d = p.xz - vec2(56.0, 0.0);                 // from the centre, in metres
+    float r = length(d);
+    float aa = fwidth(r) * 1.5 + 0.01;
+    float rings = softLine(r - 7.0, 0.08, aa) + softLine(r - 5.6, 0.05, aa);
+    // Runes: a band of dashes; atan gives the angle, fract cuts it into 24 pieces.
+    float a = atan(d.y, d.x);
+    float runes = softLine(r - 6.3, 0.28, aa) * step(0.55, fract(a * 24.0 / 6.2832 + 0.25 * sin(a * 7.0)));
+    // The star: 5 straight lines, each 0.309 * 5.6 m from the centre (the chords of a pentagon).
+    float star = 0.0;
+    for (int k = 0; k < 5; k++) {
+        float t = 1.5708 + float(k) * 1.2566;        // 90 degrees + k * 72 degrees
+        star += softLine(dot(d, vec2(cos(t), sin(t))) - 0.309 * 5.6, 0.05, aa);
+    }
+    star *= step(r, 5.6);                            // only inside the inner ring
+    return clamp(rings + runes * 0.8 + star, 0.0, 1.0);
+}
+
 // Large, soft brightness variation of plain stone (triplanar: no UVs needed). Not POM.
 float stoneVariation(vec3 p, vec3 n) {
     vec3 weights = pow(abs(n), vec3(4.0));
@@ -254,6 +280,7 @@ void shade() {
     float specularStrength = 0.07;
     float shininess = 40.0;                          // lesson 16: bigger = smaller, sharper highlight
     vec3 specularColour = vec3(0.40, 0.52, 0.67);    // lesson 16: cool moonlight; gold reflects warm
+    vec3 emission = vec3(0.0);                       // lesson 19: light the surface gives off itself
     if (Material == WALL) {
         base = wallColour;
         specularStrength = 0.15;
@@ -272,6 +299,7 @@ void shade() {
         base = mix(vec3(0.62, 0.45, 0.17), marble, slab);
         specularStrength = 0.5;
         shininess = 120.0;
+        emission = vec3(0.62, 0.26, 1.0) * magicCircle(FragPos) * 1.6;   // lesson 19
     }
     if (Material == MARBLE) {
         // Lesson 16: polished black marble with pale veins (columns).
@@ -284,6 +312,12 @@ void shade() {
         vec3 cloth = Material == BANNER_RED ? vec3(0.34, 0.025, 0.045) : vec3(0.16, 0.035, 0.26);
         float folds = 0.85 + 0.15 * sin(UV.x * 40.0);
         base = mix(cloth * folds, vec3(0.78, 0.56, 0.22), sigil(4.0, 28.5));
+        specularStrength = 0.0;
+    }
+    if (Material == BANNER_GIANT) {
+        // Lesson 19: the giant black banner behind the throne, with a big gold sigil.
+        float folds = 0.85 + 0.15 * sin(UV.x * 60.0);
+        base = mix(vec3(0.05, 0.04, 0.06) * folds, vec3(0.78, 0.56, 0.22), sigil(16.0, 44.5));
         specularStrength = 0.0;
     }
     if (Material == GOLD) {
@@ -329,6 +363,11 @@ void shade() {
         FragColor = vec4(vec3(1.0, 0.94, 0.84) * (1.1 + 1.5 * sparkle), 1.0);
         return;
     }
+    if (Material == MAGIC) {
+        // Lesson 19: purple magic fire, brighter than white, flickering.
+        FragColor = vec4(vec3(0.62, 0.26, 1.0) * 2.2 * (0.9 + 0.1 * sin(time * 7.0 + FragPos.y * 3.0)), 1.0);
+        return;
+    }
     if (Material == WINDOW) {
         FragColor = vec4(vec3(0.48, 0.63, 0.76) * 1.3, 1.0);   // night sky behind the glass; lesson 15: glows a little
         return;
@@ -362,6 +401,15 @@ void shade() {
         float shine = pow(max(dot(n, normalize(L + viewDir)), 0.0), shininess);
         colour += vec3(1.0, 0.62, 0.30) * fade * (base * (0.08 + lambert) + shine * specularStrength);
     }
+    // Lesson 19: purple magic light: the two braziers and a glow above the throne.
+    const vec3 magicLights[3] = vec3[](vec3(62.0, 5.5, -6.0), vec3(62.0, 5.5, 6.0), vec3(95.0, 13.0, 0.0));
+    for (int i = 0; i < 3; i++) {
+        vec3 toFire = magicLights[i] - FragPos;
+        float fade = 1.4 / (1.0 + dot(toFire, toFire) * 0.012);
+        float lambert = max(dot(n, normalize(toFire)), 0.0);
+        colour += vec3(0.62, 0.26, 1.0) * fade * base * (0.1 + lambert);
+    }
+    colour += emission;   // lesson 19: glowing lines are not lit, they shine
 
     // Fog depends mostly on depth into the hall; zooming out won't erase the scene.
     float depth = clamp((-FragPos.z + 5.0) / 60.0, 0.0, 1.0);

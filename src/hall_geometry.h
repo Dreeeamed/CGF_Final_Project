@@ -36,7 +36,7 @@ static_assert(archHalfWidth > 2.9f, "The high windows and their rims must fit in
 }
 
 enum Material { Stone, Floor, Darkness, Banner, Carpet, Brass, Flame, Window, Door, Beam, Knight, Wall,
-                Garden, Marble, Gold, BannerRed, BannerPurple, Crystal };
+                Garden, Marble, Gold, BannerRed, BannerPurple, Crystal, Magic, BannerGiant };
 
 struct Vertex {
     glm::vec3 position;

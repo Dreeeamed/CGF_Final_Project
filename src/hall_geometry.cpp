@@ -379,25 +379,39 @@ void crystalChandelier(Vertices& v, float x) {
     crystal(v, {x, 30.2f, 0}, 3.4f, 0.75f);                               // the big crystal at the bottom
 }
 
+// Lesson 19: the throne end of the hall. Twelve wide marble steps with gold edges,
+// each one 1.2 m further back, 0.42 m higher and a little narrower; on top a tall
+// marble throne between two gold pillars, with gold spikes.
 void throne(Vertices& v) {
-    // Five steps, each one narrower and shallower than the one below.
-    for (int i = 0; i < 5; ++i) {
-        const float halfDepth = 4.8f - i * 0.45f;
-        box(v, {88 + i * 0.7f, i * 0.32f, -halfDepth},
-               {105 - i * 0.6f, (i + 1) * 0.32f, halfDepth}, Floor);
+    constexpr int steps = 12;
+    for (int i = 0; i < steps; ++i) {
+        const float front = 72.0f + i * 1.2f;   // where this step begins
+        const float top = (i + 1) * 0.42f;      // its height
+        const float half = 10.0f - i * 0.2f;    // half of its width
+        box(v, {front, 0, -half}, {108, top, half}, Marble);
+        box(v, {front - 0.06f, top - 0.08f, -half}, {front + 0.16f, top + 0.03f, half}, Gold);   // gold edge
     }
-    box(v, {95, 1.6f, -2.7f}, {100, 4.2f, 2.7f}, Stone);             // seat block
-    box(v, {94.8f, 4.2f, -2.7f}, {99.7f, 4.6f, 2.7f}, Banner);      // cushion
-    box(v, {99, 4.2f, -2.9f}, {100.2f, 12, 2.9f}, Brass);           // back
-    box(v, {98.8f, 4.6f, -2.4f}, {99, 11.4f, 2.4f}, Banner);        // back cloth
-    for (int side : {-1, 1}) {                                      // arm rests
-        const float z = side * 2.9f;
-        box(v, {94.8f, 1.6f, z - 0.35f}, {95.5f, 6.0f, z + 0.35f}, Brass);
-        box(v, {94.7f, 5.6f, z - 0.4f}, {100.2f, 6.2f, z + 0.4f}, Brass);
+    const float y = steps * 0.42f;   // 5.04 m: the platform the throne stands on
+    box(v, {96.0f, y, -2.2f}, {99.6f, y + 2.0f, 2.2f}, Marble);             // seat
+    box(v, {96.2f, y + 2.0f, -1.9f}, {99.3f, y + 2.45f, 1.9f}, Banner);    // cushion
+    box(v, {99.6f, y, -2.4f}, {100.8f, y + 11.0f, 2.4f}, Marble);           // tall back
+    box(v, {99.35f, y + 2.4f, -1.9f}, {99.6f, y + 10.2f, 1.9f}, Banner);   // cloth on the back
+    for (int side : {-1, 1}) {
+        const float z = side * 2.2f, pillarZ = side * 2.7f;
+        box(v, {96.0f, y + 2.0f, z - 0.35f}, {99.6f, y + 3.4f, z + 0.35f}, Gold);               // arm rest
+        box(v, {99.4f, y, pillarZ - 0.3f}, {101.0f, y + 12.5f, pillarZ + 0.3f}, Gold);          // pillar
+        cylinder(v, {100.2f, y + 12.5f, pillarZ}, 2.4f, 0.36f, 0.02f, Gold, 12);                // its spike
     }
-    // Five spikes on top of the back, the middle one the tallest.
-    for (int i = -2; i <= 2; ++i)
-        cylinder(v, {99.5f, 12, i * 1.2f}, 2.8f - std::abs(i) * 0.7f, 0.45f, 0.015f, Brass, 24);
+    for (int i = -2; i <= 2; ++i)   // five spikes on the back, the middle one the tallest
+        cylinder(v, {100.2f, y + 11.0f, i * 0.95f}, 3.8f - std::abs(i) * 0.9f, 0.32f, 0.02f, Gold, 12);
+}
+
+// Lesson 19: a magic brazier: marble foot, gold stem and bowl, a purple flame (Magic).
+void brazier(Vertices& v, float x, float z) {
+    cylinder(v, {x, 0, z},    0.5f, 1.5f, 1.2f, Marble, 24);   // foot
+    cylinder(v, {x, 0.5f, z}, 3.0f, 0.45f, 0.35f, Gold, 16);   // stem
+    cylinder(v, {x, 3.5f, z}, 0.9f, 0.6f, 1.6f, Gold, 24);     // bowl, wider at the top
+    cylinder(v, {x, 4.3f, z}, 2.8f, 1.2f, 0.05f, Magic, 16);   // the flame: a cone
 }
 
 void gate(Vertices& v, Vertices& grille) {
@@ -469,7 +483,7 @@ void Mesh::destroy() {
 void Hall::build() {
     Vertices v, front, light, marker, bars, goldenKey;
     box(v, {-108, -1, -20}, {108, 0, 20}, Floor);
-    box(v, {-106, 0.025f, -3}, {88, 0.055f, 3}, Carpet);
+    box(v, {-106, 0.025f, -3}, {48, 0.055f, 3}, Carpet);   // lesson 19: ends before the magic circle
     sideWall(v, -1);       // far wall: always drawn
     sideWall(front, 1);    // near wall: only with C (cutaway off)
     vault(v, front);   // lesson 16
@@ -484,6 +498,14 @@ void Hall::build() {
     for (float x : {-64.0f, -32.0f, 0.0f, 32.0f, 64.0f})
         crystalChandelier(v, x);
     throne(v);
+    // Lesson 19: two magic braziers in front of the stairs (hall.frag lights them up),
+    // and two giant banners with our sigil: on the back wall behind the throne (we see it
+    // from the side camera) and on the end wall. The front of a banner looks along
+    // cross(across, up): +x across -> faces +z (the camera), +z across -> faces -x (the hall).
+    brazier(v, 62.0f, -6.0f);
+    brazier(v, 62.0f, 6.0f);
+    hangingBanner(v, {89.0f, 56.0f, -19.4f}, {16.0f, 0, 0}, 40.0f, 4.5f, BannerGiant);
+    hangingBanner(v, {107.4f, 58.0f, -8.0f}, {0, 0, 16.0f}, 42.0f, 4.5f, BannerGiant);
     gate(v, bars);
     keyShape(goldenKey);
     for (int i = 0; i < layout::columnsPerSide - 1; ++i) {

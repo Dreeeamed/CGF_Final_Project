@@ -32,7 +32,7 @@
 ## Где разбирать код
 
 - `src/hall_geometry.h`: размеры зала, число колонн и параметры размещения.
-- `src/hall_geometry.cpp`: `column`, `portal`, `sideWall`, `vault`, `arcade`, `hangingBanner`, `crystalChandelier`, `throne` и сборка в `Hall::build`.
+- `src/hall_geometry.cpp`: `column`, `portal`, `sideWall`, `vault`, `arcade`, `hangingBanner`, `crystalChandelier`, `throne`, `brazier` и сборка в `Hall::build`.
 - `shaders/hall.frag`: POM на стенах (`parallaxUV`, `parallaxShadow`), материалы камня, ткани, ковра, металла; холодный и тёплый свет, дымка.
 - `src/main.cpp`: управление, камера, переключение фасад / холл, кадр по шагам.
 - `src/hud.cpp`, `shaders/text.*`: текст на экране и подсказка по H.

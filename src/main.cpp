@@ -284,7 +284,7 @@ int main(int argc, char* argv[]) {
     double lastMouseX = 0.0, lastMouseY = 0.0;   // to measure how far the mouse moved
 
     // Lesson 12, the quest: take the key at the throne, open the gate, enter the garden.
-    const float keyX = 80.0f;     // the key floats at the foot of the throne
+    const float keyX = 68.0f;     // the key floats at the foot of the throne stairs (lesson 19)
     const float gateX = -100.0f;  // the entrance gate, where the knight starts
     bool hasKey = false;
     bool gateOpening = false;     // set once, when the key opens the gate
@@ -426,7 +426,7 @@ int main(int argc, char* argv[]) {
         } else if (insideHall) {
             float speed = pressed(GLFW_KEY_LEFT_SHIFT) ? 18.0f : 7.0f;
             if (gardenWalk > 0.0f) speed = 0.0f;   // walking through the gate: A/D do nothing
-            knightX = std::clamp(knightX + direction * speed * dt, -105.0f, 87.0f);
+            knightX = std::clamp(knightX + direction * speed * dt, -105.0f, 70.0f);   // lesson 19: stairs start at 72
             // The camera does not jump to the knight; every frame it closes part of the gap.
             const float targetX = overview ? 0.0f : std::clamp(knightX, -78.0f, 78.0f);
             cameraX += (targetX - cameraX) * (1.0f - std::exp(-5.0f * dt));
@@ -449,7 +449,7 @@ int main(int argc, char* argv[]) {
             if (capture) {
                 if (renderedFrames == 1) { distance = 154; lookHeight = 26; }
                 if (renderedFrames == 2) { cameraX = -89; knightX = -98; distance = 40; lookHeight = 10; }
-                if (renderedFrames == 3) { cameraX = 88; knightX = 85; distance = 42; lookHeight = 12; }
+                if (renderedFrames == 3) { cameraX = 78; knightX = 66; distance = 50; lookHeight = 14; }
                 if (renderedFrames == 4) showForeground = true;
                 if (renderedFrames == 5) { insideHall = false; distance = 14; lookHeight = 3.5f; }
                 if (renderedFrames == 6) {   // free camera: POM close-up of the left end wall
