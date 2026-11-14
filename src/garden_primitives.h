@@ -3,11 +3,21 @@
 // plus the two tools that combine them: `place` and `random01`.
 #include "garden_scene.h"
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <vector>
 
 namespace royal_garden {
 using Vertices = std::vector<Vertex>;
 constexpr float pi = 3.14159265359f;
+
+// Short names for the three basic transformations (L-4-1 Transformations),
+// so that a chain of them reads like the lecture's formulas: M = T * R * S.
+inline glm::mat4 T(float x, float y, float z) { return glm::translate(glm::mat4(1), glm::vec3(x, y, z)); }
+inline glm::mat4 S(float x, float y, float z) { return glm::scale(glm::mat4(1), glm::vec3(x, y, z)); }
+inline glm::mat4 S(float s) { return S(s, s, s); }
+inline glm::mat4 RotX(float degrees) { return glm::rotate(glm::mat4(1), glm::radians(degrees), glm::vec3(1, 0, 0)); }
+inline glm::mat4 RotY(float degrees) { return glm::rotate(glm::mat4(1), glm::radians(degrees), glm::vec3(0, 1, 0)); }
+inline glm::mat4 RotZ(float degrees) { return glm::rotate(glm::mat4(1), glm::radians(degrees), glm::vec3(0, 0, 1)); }
 
 // One flat triangle. Corners counter-clockwise seen from the front (right-hand rule).
 void triangle(Vertices& v, glm::vec3 a, glm::vec3 b, glm::vec3 c, Material m,
@@ -18,6 +28,9 @@ void quad(Vertices& v, glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 d, Mater
 void box(Vertices& v, glm::vec3 lo, glm::vec3 hi, Material m);
 // A regular N-sided polygon pushed up into a solid, standing on `base`.
 void prism(Vertices& v, glm::vec3 base, float radius, float height, int sides, Material m);
+// A hollow prism: a wall of N sides between an outer and an inner radius (a basin rim).
+void ringPrism(Vertices& v, glm::vec3 base, float outer, float inner, float height, int sides,
+               Material m);
 // A tapered tube up local +Y from the origin: radius r0 at the bottom, r1 at the top.
 void cylinder(Vertices& v, float height, float r0, float r1, int segments, Material m);
 // A sphere of radius r round the origin.

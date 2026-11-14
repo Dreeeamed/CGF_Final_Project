@@ -1,19 +1,8 @@
 #include "garden_plants.h"
-#include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <cmath>
 
 namespace royal_garden {
-namespace {
-// Short names for the three basic transformations (L-4-1 Transformations),
-// so that a chain of them reads like the lecture's formulas.
-glm::mat4 T(float x, float y, float z) { return glm::translate(glm::mat4(1), glm::vec3(x, y, z)); }
-glm::mat4 S(float x, float y, float z) { return glm::scale(glm::mat4(1), glm::vec3(x, y, z)); }
-glm::mat4 S(float s) { return S(s, s, s); }
-glm::mat4 RotY(float degrees) { return glm::rotate(glm::mat4(1), glm::radians(degrees), glm::vec3(0, 1, 0)); }
-glm::mat4 RotZ(float degrees) { return glm::rotate(glm::mat4(1), glm::radians(degrees), glm::vec3(0, 0, 1)); }
-glm::mat4 RotX(float degrees) { return glm::rotate(glm::mat4(1), glm::radians(degrees), glm::vec3(1, 0, 0)); }
-}
 
 PlantKit::PlantKit() {
     cylinder(limb, 1.0f, 1.0f, shape.shrink, 10, Bark);  // top radius = the child's bottom radius

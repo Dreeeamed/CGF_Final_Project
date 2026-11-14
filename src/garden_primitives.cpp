@@ -39,6 +39,24 @@ void prism(Vertices& v, glm::vec3 base, float radius, float height, int sides, M
     }
 }
 
+// Three faces per side: the outer wall (faces away from the centre), the inner wall
+// (its corners in the opposite order, so it faces the centre) and the flat top.
+// The corners use the same angles as `prism`, so a prism of radius `inner` fits
+// exactly inside: that is how the water fills the basin.
+void ringPrism(Vertices& v, glm::vec3 base, float outer, float inner, float height, int sides,
+               Material m) {
+    const glm::vec3 top = base + glm::vec3(0, height, 0);
+    for (int i = 0; i < sides; ++i) {
+        const float a0 = 2 * pi * (i + 0.5f) / sides;
+        const float a1 = 2 * pi * (i + 1.5f) / sides;
+        const glm::vec3 d0(std::cos(a0), 0, std::sin(a0)), d1(std::cos(a1), 0, std::sin(a1));
+        const glm::vec3 o0 = outer * d0, o1 = outer * d1, i0 = inner * d0, i1 = inner * d1;
+        quad(v, base + o1, base + o0, top + o0, top + o1, m);  // outer wall
+        quad(v, base + i0, base + i1, top + i1, top + i0, m);  // inner wall
+        quad(v, top + i0, top + i1, top + o1, top + o0, m);    // top of the rim
+    }
+}
+
 // The side normals point straight out from the axis, so the light rolls smoothly
 // round it (smooth shading, L-5-2). UV.x runs 0..1 round the cylinder.
 void cylinder(Vertices& v, float height, float r0, float r1, int segments, Material m) {

@@ -20,6 +20,13 @@ const int PETAL_LAVENDER = 9;
 const int PETAL_WHITE = 10;
 const int FLOWER_HEART = 11;
 const int HEDGE = 12;
+const int MARBLE = 13;
+const int WATER = 14;
+const int CRYSTAL = 15;
+
+uniform float time;   // seconds; set by main.cpp (0 in the smoke test)
+// The fountain's centre in the world: (layout::fountainX, layout::plazaZ).
+const vec2 fountainCentre = vec2(0.0, -12.0);
 
 // Garden palette (hex design targets / 255).
 const vec3 mossColour  = vec3(0.188, 0.302, 0.325);  // #304D53 desaturated teal
@@ -33,6 +40,8 @@ const vec3 lavenderColour = vec3(0.722, 0.663, 0.910); // #B8A9E8 pale lavender 
 const vec3 paleColour  = vec3(0.780, 0.820, 0.900);  // bluish white petals
 const vec3 soilColour  = vec3(0.070, 0.075, 0.090);  // almost black earth
 const vec3 hedgeColour = vec3(0.120, 0.215, 0.230);  // darker, clipped teal
+const vec3 marbleColour = vec3(0.330, 0.370, 0.470); // pale blue-grey: the fountain stands out
+const vec3 waterColour = vec3(0.392, 0.608, 0.682);  // #649BAE muted cyan
 const vec3 fogColour   = vec3(0.043, 0.063, 0.125);  // #0B1020 midnight navy
 
 void main() {
@@ -61,6 +70,9 @@ void main() {
     if (Material == PETAL_WHITE) base = paleColour;
     if (Material == FLOWER_HEART) base = goldColour;
     if (Material == HEDGE) base = hedgeColour;
+    if (Material == MARBLE) base = marbleColour;
+    if (Material == WATER) base = waterColour * 0.55;
+    if (Material == CRYSTAL) base = violetColour;
 
     // Temporary lighting until Phase 7: low cool ambient + one moonlight direction
     // (Lambert diffuse, L-5-2 Shading). Enough to tell the faces of a box apart.
@@ -68,6 +80,20 @@ void main() {
     vec3 moonDir = normalize(vec3(-0.4, 0.8, 0.45));
     float diffuse = max(dot(n, moonDir), 0.0);
     vec3 colour = base * (vec3(0.30, 0.34, 0.45) + vec3(0.70, 0.75, 0.90) * diffuse);
+    if (Material == WATER) {
+        // Ripples: rings round the fountain's centre that move outwards with time.
+        // sin(distance * k - time * speed) is a wave travelling away from the centre.
+        float d = length(FragPos.xz - fountainCentre);
+        float ripple = 0.5 + 0.5 * sin(d * 7.0 - time * 2.5);
+        colour += waterColour * 0.12 * ripple;
+        // A mirror-like sparkle of the moon (Blinn-Phong specular, L-5-2 Shading):
+        // strongest where the halfway vector between moon and eye meets the normal.
+        vec3 viewDir = normalize(cameraPos - FragPos);
+        vec3 halfway = normalize(moonDir + viewDir);
+        colour += vec3(0.75, 0.85, 1.0) * pow(max(dot(n, halfway), 0.0), 80.0) * 0.8;
+    }
+    // The crystal glows: strong emission, so the team's bloom makes a soft halo.
+    if (Material == CRYSTAL) colour += violetColour * 1.6;
     // Magical flowers give a little light of their own (emission): it is added on top
     // of the reflected light, so they stay visible even on their dark side.
     if (Material == PETAL_LAVENDER) colour += lavenderColour * 0.35;

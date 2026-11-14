@@ -1,4 +1,5 @@
 #include "garden_scene.h"
+#include "garden_fountain.h"
 #include "garden_plants.h"
 #include "garden_primitives.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -125,6 +126,8 @@ void Garden::build() {
     branchPath(v, layout::fountainX, plazaFront - 0.5f);
     prism(v, {layout::fountainX, 0, layout::plazaZ}, layout::plazaRadius,
           layout::plazaTop, 8, PathStone);
+    // The fountain itself: one instance transformation puts it on the plaza centre.
+    fountain(v, T(layout::fountainX, layout::plazaTop, layout::plazaZ));
 
     // Zone C: the flower path, its round rondel, two mirrored flowerbeds,
     // and a ring of flowers round the rondel (the front, where the path arrives, stays open).
