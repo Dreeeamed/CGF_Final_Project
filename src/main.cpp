@@ -24,6 +24,7 @@
 #include "hud.h"
 #include "material.h"
 #include "post.h"
+#include "intro.h"
 
 namespace {
 
@@ -144,8 +145,9 @@ std::string infoText(bool parallaxOn, const Quality& quality, bool vsync, bool p
                   parallaxOn ? "ON" : "OFF", quality.name, vsync ? "on" : "off", postOn ? "ON" : "OFF",
                   paused ? "   PAUSED" : "", freeCamera ? "   FREE CAMERA" : "",
                   fps, fps > 0.0f ? 1000.0f / fps : 0.0f, hasKey ? "found" : "not found");
-    return std::string("Topic 15: 2.5D castle with parallax occlusion on walls\n")
-         + "Akezhan Muzamelov, Bolatbek Bolat, Adil Dyussenov\n" + status;
+    return std::string("Topic 15: 2.5D castle with parallax occlusion on walls\n"
+                       "Akezhan Muzamelov, Bolatbek Bolat, Adil Dyussenov\n") +
+           status;
 }
 
 // Lesson 9: text over the picture - who we are, what is switched on, how to play.
@@ -254,7 +256,13 @@ int main(int argc, char* argv[]) {
         std::cerr << "Could not create the post-processing pass.\n";
         glfwDestroyWindow(window); glfwTerminate(); return 1;
     }
-
+    Intro intro;        // the first scene: the castle from far away and the START button
+    if (!intro.init()) {
+        std::cerr << "Could not create the intro scene.\n";
+        glfwDestroyWindow(window); glfwTerminate(); return 1;
+    }
+    bool inIntro = !smokeTest;   // the smoke test checks the castle views, so it skips the intro
+    float hallFadeIn = 0.0f;     // 1 = black ... 0 = clear: the hall fades in after the intro
     // -----------------------------------------------------------------------
     // State that changes while the program runs
     // -----------------------------------------------------------------------
@@ -321,6 +329,31 @@ int main(int argc, char* argv[]) {
         previousTime = time;
         glfwPollEvents();
         auto pressed = [&](int key) { return glfwGetKey(window, key) == GLFW_PRESS; };
+        // ---- 1b. The intro is the first scene: only START (or Esc) works until it is over ----
+        if (inIntro) {
+            if (pressed(GLFW_KEY_ESCAPE)) glfwSetWindowShouldClose(window, true);
+            int introWidth, introHeight;
+            glfwGetFramebufferSize(window, &introWidth, &introHeight);
+            if (introWidth == 0 || introHeight == 0) { glfwWaitEvents(); continue; }
+            intro.update(window, dt);
+            post.beginScene(introWidth, introHeight);   // the same HDR + film look as the castle
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            intro.drawScene(introWidth, introHeight);
+            post.finish(time, postOn);
+            intro.drawButton(hud, introWidth, introHeight);
+            glfwSwapBuffers(window);
+            if (intro.finished()) {
+                // Scene 1 (intro) -> scene 2 (the castle interior), from a clean state at the gate.
+                inIntro = false;
+                insideHall = true; showForeground = false; overview = false; freeCamera = false;
+                knightX = -98.0f; cameraX = -78.0f; distance = 40.0f; lookHeight = 10.0f;
+                hasKey = false; gateOpening = false; gateLift = 0.0f; inGarden = false; gardenWalk = 0.0f;
+                hallFadeIn = 1.0f;                                  // the hall appears out of the black
+                previousTime = static_cast<float>(glfwGetTime());   // no big time jump in the castle
+            }
+            continue;
+        }
 
         // ---- 2. Keys that switch something --------------------------------
         if (pressed(GLFW_KEY_ESCAPE)) glfwSetWindowShouldClose(window, true);
@@ -572,7 +605,13 @@ int main(int argc, char* argv[]) {
         const std::string hint = (insideHall && !freeCamera)
                                ? questHint(nearKey, nearGate, hasKey, gateLift, inGarden) : "";
         drawHud(hud, width, height, info, showHelp, culling, hint);
-
+        if (hallFadeIn > 0.0f) {
+            hallFadeIn = std::max(hallFadeIn - frameTime / 0.8f, 0.0f);
+            const float eased = hallFadeIn * hallFadeIn * (3.0f - 2.0f * hallFadeIn);
+            hud.begin(width, height);
+            hud.rect(0.0f, 0.0f, float(width), float(height), glm::vec4(0.0f, 0.0f, 0.0f, eased));
+            hud.end();
+        }
         // ---- 8. Show the picture (and check it in the smoke test) ----------
         if (capture && !captureFrame(captureDir / captures[renderedFrames], width, height)) {
             std::cerr << "Could not save capture.\n"; exitCode = 1; break;
@@ -590,6 +629,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    intro.destroy();
     post.destroy();
     hud.destroy();
     hall.destroy();
