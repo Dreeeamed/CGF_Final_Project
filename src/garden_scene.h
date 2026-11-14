@@ -2,6 +2,7 @@
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <vector>
+#include "garden_particles.h"
 
 // The Forgotten Royal Garden: a separate scene, independent of the hall and facade.
 namespace royal_garden {
@@ -75,10 +76,12 @@ struct Mesh {
 };
 
 struct Garden {
-    Mesh ground;   // ground, paths, curbs, plaza and pavings
-    Mesh plants;   // trees, flowers, bushes and hedges
-    void build();
-    void draw() const;
+    Mesh ground;          // ground, paths, curbs, plaza, pavings and the fountain
+    Mesh plants;          // trees, flowers, bushes and hedges
+    FountainSpray spray;  // the fountain's falling water (particles)
+    bool build();         // false if a garden shader could not be loaded
+    void update(float dt);   // animation: called every frame while the garden is shown
+    void draw(const glm::mat4& view, const glm::mat4& projection, int viewportHeight) const;
     void destroy();
 };
 }

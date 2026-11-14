@@ -13,6 +13,8 @@ constexpr float basinBaseY = 0.43f;    // top of the two foundation steps
 constexpr float basinWall = 0.85f;     // height of the basin wall
 constexpr float waterLevel = 0.6f;     // water surface, above the basin base
 constexpr float pedestal = 2.9f;       // central column, from the basin base to the upper bowl
+constexpr float bowlRimTop = 0.59f;    // top of the upper bowl's rim, above the bowl frame
+constexpr float bowlOuter = 1.84f;     // outer radius of the upper bowl's gold rim
 }
 
 // Adds the whole fountain to `v`. `instance` places it in the garden.

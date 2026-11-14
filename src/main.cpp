@@ -240,7 +240,10 @@ int main(int argc, char* argv[]) {
     grand_hall::Hall hall;
     hall.build();
     royal_garden::Garden garden;   // the inner garden behind the gate (separate scene)
-    garden.build();
+    if (!garden.build()) {
+        std::cerr << "Could not build the garden.\n";
+        glfwDestroyWindow(window); glfwTerminate(); return 1;
+    }
     // Texture unit numbers: 0 colour, 1 height map, 2 normal map.
     for (GLuint program : {stoneProgram, hallProgram}) {
         glUseProgram(program);
@@ -520,6 +523,7 @@ int main(int argc, char* argv[]) {
         }
         // The walk may have just finished, or E just sent the knight back.
         gardenScene = gardenShortcut || (insideHall && inGarden && gardenWalk >= 1.0f);
+        if (gardenScene && !paused && !smokeTest) garden.update(dt);   // fountain water
 
         // ---- 6. Draw the scene ---------------------------------------------
         int width, height;
@@ -569,7 +573,7 @@ int main(int argc, char* argv[]) {
         glActiveTexture(GL_TEXTURE0);
 
         if (gardenScene) {
-            garden.draw();
+            garden.draw(view, projection, height);
         } else if (insideHall) {
             hall.architecture.draw();
             if (showForeground || freeCamera) {

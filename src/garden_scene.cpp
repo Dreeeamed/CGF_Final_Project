@@ -101,7 +101,7 @@ void Mesh::destroy() {
 // The garden
 // ---------------------------------------------------------------------------
 
-void Garden::build() {
+bool Garden::build() {
     Vertices v, green;   // v: stone and ground; green: everything that grows
     const PlantKit kit;  // builds every plant prototype once
 
@@ -188,13 +188,21 @@ void Garden::build() {
 
     ground.upload(v);
     plants.upload(green);
+    return spray.init();
 }
-void Garden::draw() const {
+void Garden::update(float dt) {
+    spray.update(dt);
+}
+// main.cpp has already chosen the garden shader and set its matrices for the solid
+// meshes. The spray then switches to its own particle shader.
+void Garden::draw(const glm::mat4& view, const glm::mat4& projection, int viewportHeight) const {
     ground.draw();
     plants.draw();
+    spray.draw(view, projection, viewportHeight);   // last: see-through things after solid ones
 }
 void Garden::destroy() {
     ground.destroy();
     plants.destroy();
+    spray.destroy();
 }
 }

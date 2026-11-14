@@ -74,14 +74,14 @@ void fountain(Vertices& v, const glm::mat4& instance) {
     add(bowl);
     ringPrism(part, {0, 0, 0}, 1.8f, 1.55f, 0.14f, 16, Marble);
     add(bowl * T(0, 0.45f, 0));
-    ringPrism(part, {0, 0, 0}, 1.84f, 1.51f, 0.04f, 16, Gold);
-    add(bowl * T(0, 0.59f, 0));
+    ringPrism(part, {0, 0, 0}, f::bowlOuter, 1.51f, 0.04f, 16, Gold);
+    add(bowl * T(0, f::bowlRimTop, 0));
     prism(part, {0, 0, 0}, 1.55f, 0.02f, 16, Water);
     add(bowl * T(0, 0.5f, 0));
 
     // Spire: a slender column, a gold collar, a pointed cone, and a floating crystal
     // that gives off violet light - the "magic" heart of the garden.
-    const glm::mat4 spire = bowl * T(0, 0.59f, 0);
+    const glm::mat4 spire = bowl * T(0, f::bowlRimTop, 0);
     cylinder(part, 1.4f, 0.18f, 0.14f, 12, Marble);
     add(spire);
     cylinder(part, 0.06f, 0.22f, 0.22f, 12, Gold);

@@ -39,6 +39,7 @@ add_executable(simple_castle
     src/main.cpp
     src/castle_geometry.cpp
     src/garden_fountain.cpp
+    src/garden_particles.cpp
     src/garden_plants.cpp
     src/garden_primitives.cpp
     src/garden_scene.cpp
