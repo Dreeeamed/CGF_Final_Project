@@ -1,4 +1,5 @@
 #include "garden_scene.h"
+#include "garden_decor.h"
 #include "garden_fountain.h"
 #include "garden_plants.h"
 #include "garden_primitives.h"
@@ -154,6 +155,13 @@ bool Garden::build() {
     kit.hedge(green, {hx0, -9.0f}, {hx0, hz}, 1.4f, 0.8f);   // left side
     kit.hedge(green, {hx0, hz}, {hx1, hz}, 1.4f, 0.8f);      // back
     kit.hedge(green, {hx1, hz}, {hx1, -9.0f}, 1.4f, 0.8f);   // right side
+    // Three benches, one model: the back one faces the path (+Z); the side ones are
+    // turned 90 degrees to face each other. RotY(a) turns the bench's "forward" (+Z)
+    // to (sin a, 0, cos a): +90 -> +X (looks right), -90 -> -X (looks left).
+    const float seatY = layout::areaTop;
+    bench(v, T(bxE, seatY, layout::benchAreaBackZ + 0.7f));
+    bench(v, T(bxE - bh + 0.7f, seatY, -10.8f) * RotY(90.0f));
+    bench(v, T(bxE + bh - 0.7f, seatY, -10.8f) * RotY(-90.0f));
 
     // The back wall of the garden: a tall hedge across the whole strip.
     kit.hedge(green, {layout::startX, layout::backHedgeZ}, {layout::endX, layout::backHedgeZ}, 2.6f, 1.4f);
