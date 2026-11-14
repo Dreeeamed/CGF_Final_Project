@@ -25,7 +25,7 @@ uniform float gateLift;           // 0 = gate closed, 1 = fully raised
 // Material numbers, the same order as `enum Material` in hall_geometry.h.
 const int STONE = 0, FLOOR = 1, DARKNESS = 2, BANNER = 3, CARPET = 4, BRASS = 5,
           FLAME = 6, WINDOW = 7, DOOR = 8, BEAM = 9, KNIGHT = 10, WALL = 11, GARDEN = 12,
-          MARBLE = 13, GOLD = 14, BANNER_RED = 15, BANNER_PURPLE = 16;
+          MARBLE = 13, GOLD = 14, BANNER_RED = 15, BANNER_PURPLE = 16, CRYSTAL = 17;
 
 // ---------------------------------------------------------------------------
 // Wall axes
@@ -322,6 +322,13 @@ void shade() {
         FragColor = vec4(vec3(1.0, 0.72, 0.31) * 3.0 * (0.94 + 0.06 * sin(time * 4.0 + FragPos.x)), 1.0);
         return;
     }
+    if (Material == CRYSTAL) {
+        // Lesson 18: cut crystal catches the candle light, brighter than white (it glows).
+        // Some facets flash: a random number per 1/6 m cell, new 3 times a second.
+        float sparkle = step(0.93, hash3(floor(FragPos * 6.0) + floor(time * 3.0)));
+        FragColor = vec4(vec3(1.0, 0.94, 0.84) * (1.1 + 1.5 * sparkle), 1.0);
+        return;
+    }
     if (Material == WINDOW) {
         FragColor = vec4(vec3(0.48, 0.63, 0.76) * 1.3, 1.0);   // night sky behind the glass; lesson 15: glows a little
         return;
@@ -340,15 +347,21 @@ void shade() {
     vec3 viewDir = normalize(cameraPos - FragPos);
     float diffuse = max(dot(n, keyDir), 0.0) * wallShadow;       // Lambert, darkened by POM shadow
     float rim = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0) * 0.10;   // thin light on the edges
-    vec3 colour = base * (vec3(0.14, 0.17, 0.24) + vec3(1.10, 1.12, 1.18) * diffuse + rim);
+    vec3 colour = base * (vec3(0.084, 0.102, 0.144) + vec3(0.770, 0.784, 0.826) * diffuse + rim);
     float spec = pow(max(dot(n, normalize(keyDir + viewDir)), 0.0), shininess) * wallShadow;   // Blinn-Phong
     colour += specularColour * spec * specularStrength;
 
-    // A warm local pool below the chandelier, against the cool high windows.
-    vec3 toLamp = vec3(0, 31, 0) - FragPos;
-    float warm = 1.0 / (1.0 + dot(toLamp, toLamp) * 0.0025);
-    float lampDiffuse = max(dot(n, normalize(toLamp)), 0.0);
-    colour += base * vec3(0.95, 0.42, 0.11) * warm * (0.12 + lampDiffuse);
+    // Lesson 18: five crystal chandeliers = five warm point lights, at the same x as in
+    // Hall::build (-64, -32, 0, 32, 64), 35 m high. Each one: Lambert + Blinn-Phong,
+    // weaker with distance (1 / (1 + k d^2)). Cold moonlight + warm candles = dark fantasy.
+    for (int i = 0; i < 5; i++) {
+        vec3 toLamp = vec3(-64.0 + 32.0 * float(i), 35.0, 0.0) - FragPos;
+        float fade = 1.3 / (1.0 + dot(toLamp, toLamp) * 0.004);
+        vec3 L = normalize(toLamp);
+        float lambert = max(dot(n, L), 0.0);
+        float shine = pow(max(dot(n, normalize(L + viewDir)), 0.0), shininess);
+        colour += vec3(1.0, 0.62, 0.30) * fade * (base * (0.08 + lambert) + shine * specularStrength);
+    }
 
     // Fog depends mostly on depth into the hall; zooming out won't erase the scene.
     float depth = clamp((-FragPos.z + 5.0) / 60.0, 0.0, 1.0);

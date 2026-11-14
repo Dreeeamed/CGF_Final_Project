@@ -338,28 +338,45 @@ void arcade(Vertices& v, Vertices& foreground) {
     }
 }
 
-void chandelier(Vertices& v) {
-    rod(v, {0, layout::vaultApex, 0}, {0, 40, 0}, 0.12f);   // lesson 16: hangs from the new vault
-    for (int tier = 0; tier < 2; ++tier) {
-        const float y = 33.0f - tier * 5.0f, r = 7.5f - tier * 3.0f;
-        // The ring, made of 96 short rods.
-        for (int i = 0; i < 96; ++i) {
-            const float a = 2 * pi * i / 96, b = 2 * pi * (i + 1) / 96;
-            rod(v, {r * std::cos(a), y, r * std::sin(a)},
-                   {r * std::cos(b), y, r * std::sin(b)}, 0.17f);
-        }
-        // 16 candles: holder, candle, flame; every fourth one has a chain to the centre.
-        for (int i = 0; i < 16; ++i) {
-            const float angle = 2 * pi * i / 16;
-            const float x = r * std::cos(angle), z = r * std::sin(angle);
-            cylinder(v, {x, y, z}, 0.45f, 0.35f, 0.24f, Brass, 24);
-            cylinder(v, {x, y + 0.45f, z}, 0.9f, 0.10f, 0.09f, Floor, 16);
-            cylinder(v, {x, y + 1.35f, z}, 0.5f, 0.15f, 0.02f, Flame, 16);
-            if (i % 4 == 0) rod(v, {x, y, z}, {0, 40, 0}, 0.07f);
-        }
+// Lesson 18: one long cut crystal - two four-sided pyramids joined at the widest point.
+void crystal(Vertices& v, glm::vec3 top, float length, float radius) {
+    const glm::vec3 middle = top - glm::vec3(0, length * 0.32f, 0);   // the widest point, high up
+    const glm::vec3 bottom = top - glm::vec3(0, length, 0);
+    for (int i = 0; i < 4; ++i) {
+        const float a = pi * 0.5f * i + pi * 0.25f, b = a + pi * 0.5f;
+        const glm::vec3 pa = middle + radius * glm::vec3(std::cos(a), 0, std::sin(a));
+        const glm::vec3 pb = middle + radius * glm::vec3(std::cos(b), 0, std::sin(b));
+        triangle(v, top, pb, pa, Crystal);      // upper pyramid: faces up and out
+        triangle(v, bottom, pa, pb, Crystal);   // lower pyramid: faces down and out
     }
-    cylinder(v, {0, 25.5f, 0}, 2.5f, 0.1f, 0.7f, Brass, 32);   // the bottom finial
-    rod(v, {0, 28, 0}, {0, 40, 0}, 0.2f);
+}
+
+// Lesson 18: a crystal chandelier hanging from the vault: three gold rings with crystals,
+// candles on the top ring, a big crystal at the bottom. Its light is computed in hall.frag.
+void crystalChandelier(Vertices& v, float x) {
+    rod(v, {x, layout::vaultApex, 0}, {x, 41.5f, 0}, 0.12f, Gold);   // the chain from the vault
+    struct Tier { float y, radius; int crystals; };
+    const Tier tiers[3] = {{39.0f, 5.4f, 24}, {35.0f, 3.8f, 16}, {31.6f, 2.3f, 10}};
+    for (int t = 0; t < 3; ++t) {
+        const Tier& tier = tiers[t];
+        auto onRing = [&](float angle) {   // a point on this ring
+            return glm::vec3(x + tier.radius * std::cos(angle), tier.y, tier.radius * std::sin(angle));
+        };
+        for (int i = 0; i < 48; ++i)                                      // the gold ring
+            rod(v, onRing(2 * pi * i / 48), onRing(2 * pi * (i + 1) / 48), 0.13f, Gold);
+        for (int i = 0; i < tier.crystals; ++i) {
+            const glm::vec3 p = onRing(2 * pi * i / tier.crystals);
+            crystal(v, p - glm::vec3(0, 0.15f, 0), 1.5f + 0.6f * (i % 2), 0.24f);   // long, short, long...
+            if (t == 0) {                                                 // candles on the top ring
+                cylinder(v, p, 0.7f, 0.09f, 0.08f, Crystal, 8);
+                cylinder(v, p + glm::vec3(0, 0.7f, 0), 0.5f, 0.13f, 0.01f, Flame, 8);
+            }
+        }
+        for (int i = 0; i < 6; ++i)                                       // six spokes to the stem
+            rod(v, {x, tier.y + 1.3f, 0}, onRing(2 * pi * i / 6), 0.07f, Gold);
+    }
+    rod(v, {x, 41.5f, 0}, {x, 30.2f, 0}, 0.26f, Gold);                   // the central stem
+    crystal(v, {x, 30.2f, 0}, 3.4f, 0.75f);                               // the big crystal at the bottom
 }
 
 void throne(Vertices& v) {
@@ -463,7 +480,9 @@ void Hall::build() {
         hangingBanner(v,     {bayCenterX(i) - 2.0f, 55.0f, -9.4f}, {4, 0, 0}, 26.0f, 2.5f, cloth);
         hangingBanner(front, {bayCenterX(i) - 2.0f, 55.0f,  9.4f}, {4, 0, 0}, 26.0f, 2.5f, cloth);
     }
-    chandelier(v);
+    // Lesson 18: five crystal chandeliers. hall.frag puts a warm light at the same x.
+    for (float x : {-64.0f, -32.0f, 0.0f, 32.0f, 64.0f})
+        crystalChandelier(v, x);
     throne(v);
     gate(v, bars);
     keyShape(goldenKey);
