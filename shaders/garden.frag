@@ -11,12 +11,18 @@ const int MOSS = 0;
 const int PATH_STONE = 1;
 const int GOLD = 2;
 const int CURB = 3;
+const int BARK = 4;
+const int LEAF = 5;
+const int LEAF_VIOLET = 6;
 
 // Garden palette (hex design targets / 255).
 const vec3 mossColour  = vec3(0.188, 0.302, 0.325);  // #304D53 desaturated teal
 const vec3 stoneColour = vec3(0.145, 0.180, 0.259);  // #252E42 dark blue-grey
 const vec3 slateColour = vec3(0.255, 0.275, 0.369);  // #41465E muted slate
 const vec3 goldColour  = vec3(0.773, 0.631, 0.420);  // #C5A16B antique gold
+const vec3 barkColour  = vec3(0.105, 0.110, 0.150);  // near-black blue bark
+const vec3 leafColour  = vec3(0.220, 0.360, 0.380);  // #304D53 teal, a little lighter
+const vec3 violetColour = vec3(0.545, 0.439, 0.780); // #8B70C7 soft violet accent
 const vec3 fogColour   = vec3(0.043, 0.063, 0.125);  // #0B1020 midnight navy
 
 void main() {
@@ -33,6 +39,12 @@ void main() {
     }
     if (Material == GOLD) base = goldColour;
     if (Material == CURB) base = slateColour;
+    if (Material == BARK) {
+        // Thin vertical grooves: brightness changes round the trunk (UV.x = angle).
+        base = barkColour * (0.8 + 0.2 * sin(UV.x * 6.2832 * 7.0));
+    }
+    if (Material == LEAF) base = leafColour;
+    if (Material == LEAF_VIOLET) base = violetColour * 0.75;
 
     // Temporary lighting until Phase 7: low cool ambient + one moonlight direction
     // (Lambert diffuse, L-5-2 Shading). Enough to tell the faces of a box apart.

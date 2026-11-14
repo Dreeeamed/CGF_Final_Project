@@ -31,10 +31,19 @@ constexpr float branchX[] = {flowerBranchX, fountainX, benchBranchX};
 constexpr float plazaZ = -12.0f;
 constexpr float plazaRadius = 6.0f;
 constexpr float plazaTop = 0.15f;
+
+// Where each side path ends, and the small paved area waiting there.
+constexpr float flowerBranchEnd = -10.0f;   // Zone C: a round "rondel" among the flowerbeds
+constexpr float rondelZ = -13.0f;
+constexpr float rondelRadius = 3.2f;
+constexpr float benchBranchEnd = -8.0f;     // Zone E: a square of paving for benches
+constexpr float benchAreaHalfWidth = 4.0f;
+constexpr float benchAreaBackZ = -14.0f;
+constexpr float areaTop = 0.1f;             // between pathTop and plazaTop: no z-fighting
 }
 
 // Material IDs, read by shaders/garden.frag. Keep the numbers in sync with it.
-enum Material { Moss, PathStone, Gold, Curb };
+enum Material { Moss, PathStone, Gold, Curb, Bark, Leaf, LeafViolet };
 
 // Same layout as the hall's vertex, so both shaders read the same inputs.
 struct Vertex {
@@ -53,7 +62,8 @@ struct Mesh {
 };
 
 struct Garden {
-    Mesh ground;
+    Mesh ground;   // ground, paths, curbs, plaza and pavings
+    Mesh trees;    // Zone D: the ancient trees
     void build();
     void draw() const;
     void destroy();
