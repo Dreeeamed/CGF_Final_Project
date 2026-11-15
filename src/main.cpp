@@ -24,6 +24,7 @@
 #include "hud.h"
 #include "material.h"
 #include "post.h"
+#include "dust.h"
 
 namespace {
 
@@ -127,6 +128,21 @@ const char* helpActions =
     "free camera: WASD fly, R / F up / down, arrows or right mouse look\n"
     "VSync on / off\nhide this help\nquit";
 
+// Lesson 20: --benchmark draws these views with POM off, Low, Medium and High,
+// times every pair and prints a table for the report.
+struct BenchView {
+    const char* name;
+    float cameraX, distance, lookHeight;
+};
+const BenchView benchViews[] = {
+    {"entrance (grazing walls)", -89.0f, 40.0f, 10.0f},
+    {"centre of the hall",         0.0f, 84.0f, 24.0f},
+    {"throne end",                78.0f, 50.0f, 14.0f},
+};
+const char* benchSettings[] = {"POM off", "Low", "Medium", "High"};
+constexpr int benchWarmup = 30;    // frames before timing: let the GPU settle
+constexpr int benchFrames = 300;   // frames that are timed
+
 // The window title: frame rate and switches, updated twice a second.
 std::string titleText(float fps, bool parallaxOn, const Quality& quality, bool vsync) {
     char title[160];
@@ -184,8 +200,10 @@ void drawHud(Hud& hud, int width, int height, const std::string& info, bool show
 int main(int argc, char* argv[]) {
     // -----------------------------------------------------------------------
     // Command line: --smoke-test draws a few frames in a hidden window and quits;
-    // --capture-dir <dir> also saves six fixed views as images.
+    // --capture-dir <dir> also saves eight fixed views as images;
+    // --benchmark measures the frame time at 1280 x 720 (lesson 20).
     // -----------------------------------------------------------------------
+    const bool benchmark = argc == 2 && std::string(argv[1]) == "--benchmark";
     const bool capture = argc == 3 && std::string(argv[1]) == "--capture-dir";
     const bool smokeTest = capture || (argc == 2 && std::string(argv[1]) == "--smoke-test");
     const std::filesystem::path captureDir = capture ? argv[2] : "";
@@ -207,7 +225,9 @@ int main(int argc, char* argv[]) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_SAMPLES, 4);
     if (smokeTest) glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-    GLFWwindow* window = glfwCreateWindow(1440, 900, "Castle - The Grand Hall (2.5D)", nullptr, nullptr);
+    if (benchmark) glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);   // the size must not change while timing
+    GLFWwindow* window = glfwCreateWindow(benchmark ? 1280 : 1440, benchmark ? 720 : 900,
+                                          "Castle - The Grand Hall (2.5D)", nullptr, nullptr);
     if (!window) { glfwTerminate(); return 1; }
     glfwMakeContextCurrent(window);
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -216,7 +236,7 @@ int main(int argc, char* argv[]) {
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_CULL_FACE);   // skip the back side of every triangle (front = counter-clockwise)
-    glfwSwapInterval(smokeTest ? 0 : 1);
+    glfwSwapInterval(smokeTest || benchmark ? 0 : 1);   // VSync off: measure the real speed
     std::cout << "OpenGL: " << glGetString(GL_VERSION) << '\n';
     std::cout << "Renderer: " << glGetString(GL_RENDERER) << '\n';
 
@@ -254,6 +274,11 @@ int main(int argc, char* argv[]) {
         std::cerr << "Could not create the post-processing pass.\n";
         glfwDestroyWindow(window); glfwTerminate(); return 1;
     }
+    Dust dust;          // lesson 20: dust in the air
+    if (!dust.init()) {
+        std::cerr << "Could not create the dust.\n";
+        glfwDestroyWindow(window); glfwTerminate(); return 1;
+    }
 
     // -----------------------------------------------------------------------
     // State that changes while the program runs
@@ -271,7 +296,7 @@ int main(int argc, char* argv[]) {
     // Switches.
     bool parallaxOn = true;       // P: the headline technique on / off, for comparing
     int quality = 1;              // Q: index into `qualities`, starts at Medium
-    bool vsync = !smokeTest;      // V
+    bool vsync = !smokeTest && !benchmark;   // V
     bool showHelp = false;        // H
     bool paused = false;          // Space
     bool culling = true;          // B
@@ -304,6 +329,11 @@ int main(int argc, char* argv[]) {
     float fpsTime = 0.0f;
     int renderedFrames = 0;
     int exitCode = 0;
+
+    // Lesson 20: the benchmark. Step 0..11 = view (step / 4) x setting (step % 4).
+    int benchStep = 0, benchFrame = 0;
+    double benchStart = 0.0;
+    double benchMs[3][4] = {};    // average milliseconds per frame
 
     KeyPress keyC{GLFW_KEY_C}, keyO{GLFW_KEY_O}, keyP{GLFW_KEY_P}, keyQ{GLFW_KEY_Q},
              keyV{GLFW_KEY_V}, keyH{GLFW_KEY_H}, keySpace{GLFW_KEY_SPACE}, keyB{GLFW_KEY_B},
@@ -468,6 +498,16 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        // Lesson 20: the benchmark puts the camera and the POM switches itself.
+        if (benchmark) {
+            const BenchView& b = benchViews[benchStep / 4];
+            const int setting = benchStep % 4;   // 0 = POM off, 1 = Low, 2 = Medium, 3 = High
+            insideHall = true; showForeground = false; freeCamera = false; overview = false;
+            cameraX = b.cameraX; distance = b.distance; lookHeight = b.lookHeight;
+            parallaxOn = setting > 0;
+            quality = std::max(setting - 1, 0);
+        }
+
         // ---- 5b. The quest ---------------------------------------------------
         const bool nearKey = !hasKey && std::abs(knightX - keyX) < 3.0f;
         const bool nearGate = std::abs(knightX - gateX) < 5.0f;
@@ -559,6 +599,10 @@ int main(int argc, char* argv[]) {
             glDisable(GL_CULL_FACE);   // a light shaft is a flat sheet: visible from both sides
             hall.lightShafts.draw();
             if (culling) glEnable(GL_CULL_FACE);
+            // Lesson 20: the dust ADDS light (GL_ONE, GL_ONE): new colour = old + dust.
+            // Depth test still on (columns hide the dust behind them), depth writes off.
+            glBlendFunc(GL_ONE, GL_ONE);
+            dust.draw(view, projection, clock, height);
             glDepthMask(GL_TRUE);
             glDisable(GL_BLEND);
         } else {
@@ -588,8 +632,38 @@ int main(int argc, char* argv[]) {
                 break;
             }
         }
+        if (benchmark) {
+            // glFinish waits until the GPU has really drawn everything sent so far,
+            // so the clock measures the GPU work too, not only the CPU sending it.
+            ++benchFrame;
+            if (benchFrame == benchWarmup) {
+                glFinish();
+                benchStart = glfwGetTime();
+            }
+            if (benchFrame == benchWarmup + benchFrames) {
+                glFinish();
+                benchMs[benchStep / 4][benchStep % 4] = (glfwGetTime() - benchStart) * 1000.0 / benchFrames;
+                benchFrame = 0;
+                if (++benchStep == 12) {
+                    // A Markdown table: paste it straight into the report.
+                    std::printf("\nBenchmark: %d x %d, VSync off, %s\n\n", width, height,
+                                reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
+                    std::printf("| View |");
+                    for (const char* setting : benchSettings) std::printf(" %s |", setting);
+                    std::printf("\n|---|---|---|---|---|\n");
+                    for (int v = 0; v < 3; ++v) {
+                        std::printf("| %s |", benchViews[v].name);
+                        for (int s = 0; s < 4; ++s)
+                            std::printf(" %.2f ms (%.0f FPS) |", benchMs[v][s], 1000.0 / benchMs[v][s]);
+                        std::printf("\n");
+                    }
+                    break;
+                }
+            }
+        }
     }
 
+    dust.destroy();
     post.destroy();
     hud.destroy();
     hall.destroy();

@@ -68,3 +68,15 @@ cmake --build --preset windows-debug --parallel 4
 ```
 
 Снимки PPM сохраняются из настоящего OpenGL-кадра. Они не являются нарисованными концептами.
+
+## Замер скорости
+
+Замер делаем в Release: в Debug программа упирается в процессор, и разница между настройками POM не видна.
+
+```powershell
+cmake --preset windows-release
+cmake --build --preset windows-release
+.\out\build\windows-release\bin\simple_castle.exe --benchmark
+```
+
+Программа открывает окно 1280×720 (VSync off), сама показывает 3 вида (вход, центр, трон) с POM off / Low / Medium / High, на каждый: 30 кадров разогрева и 300 кадров замера с `glFinish`, затем печатает таблицу Markdown для отчёта и закрывается.
