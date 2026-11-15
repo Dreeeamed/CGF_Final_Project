@@ -25,7 +25,8 @@ uniform float gateLift;           // 0 = gate closed, 1 = fully raised
 // Material numbers, the same order as `enum Material` in hall_geometry.h.
 const int STONE = 0, FLOOR = 1, DARKNESS = 2, BANNER = 3, CARPET = 4, BRASS = 5,
           FLAME = 6, WINDOW = 7, DOOR = 8, BEAM = 9, KNIGHT = 10, WALL = 11, GARDEN = 12,
-          MARBLE = 13, GOLD = 14, BANNER_RED = 15, BANNER_PURPLE = 16;
+          MARBLE = 13, GOLD = 14, BANNER_RED = 15, BANNER_PURPLE = 16,
+          DARK_STEEL = 17, CLOAK = 18, CLOAK_LINING = 19, BLADE = 20;
 
 // ---------------------------------------------------------------------------
 // Wall axes
@@ -333,6 +334,26 @@ void shade() {
     if (Material == KNIGHT) {
         base = vec3(0.72, 0.79, 0.83);   // polished steel
         specularStrength = 0.45;
+    }
+    // The dark knight: blackened plate, a near-black cloak with a dull red lining, a bright blade.
+    // The same colours as the knight cut-out in intro.frag.
+    if (Material == DARK_STEEL) {
+        base = vec3(0.16, 0.17, 0.20);
+        specularStrength = 0.6;
+        shininess = 60.0;
+    }
+    if (Material == CLOAK) {
+        base = vec3(0.05, 0.05, 0.065) * (0.8 + 0.2 * sin(FragPos.x * 90.0));   // folds
+        specularStrength = 0.0;
+    }
+    if (Material == CLOAK_LINING) {
+        base = vec3(0.22, 0.03, 0.04) * (0.8 + 0.2 * sin(FragPos.x * 90.0));
+        specularStrength = 0.0;
+    }
+    if (Material == BLADE) {
+        base = vec3(0.42, 0.46, 0.52);
+        specularStrength = 0.9;
+        shininess = 80.0;
     }
 
     // ---- Light --------------------------------------------------------------

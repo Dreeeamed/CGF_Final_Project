@@ -11,14 +11,22 @@
 // Every pixel shoots a ray from the camera, hits the ground and the cut-outs, and the layers
 // are painted from far to near. When the camera moves sideways a little, a near cut-out sweeps
 // across the picture while a far one barely moves, and the ground slides in perspective.
-// That difference IS the parallax. The camera always looks at the castle.
+// That difference IS the parallax.
+//
+// The knight is a cut-out too. His plane moves with him along the trail, so he is painted
+// in between the other layers at his own distance: a near tree or the grass covers him,
+// and he covers the castle. The camera only slides, it never turns: pure 2.5D.
 in vec2 ndc;
 out vec4 FragColor;
 
 uniform vec2 resolution;   // window size in pixels
 uniform float time;        // seconds
 uniform vec3 camPos;       // the eye, in metres. y = height, z gets smaller when we walk forward
-uniform float fade;        // 0..1: after START the picture fades to black
+uniform vec3 camTarget;    // the point the eye looks at
+uniform float fade;        // 0..1: at the end of the walk the picture fades to black
+uniform vec3 knightPos;    // his feet on the ground; -knightPos.z = his distance along the trail
+uniform vec4 knightPose;   // x: facing (+1 front, -1 back, 0 edge-on), y: dip (m), z: rock (rad), w: breathing
+uniform float knightStride;   // -1..1: >0 lifts his left foot, <0 his right one
 
 // Colours are written like normal screen colours and turned into "light energy" with lin().
 // The post-processing pass (post.frag) expects energy, like hall.frag gives it.
@@ -234,6 +242,120 @@ vec4 grassLayer(vec2 p, float px, float gapCentre, float gapHalf) {
     return vec4(lin(vec3(0.012, 0.022, 0.03)), cover(d, px));
 }
 
+// --- the knight: an original dark knight, as a flat cut-out ------------------------------
+// About 1.75 m tall: blackened plate armour, a closed round-topped helm with one eye slit,
+// big round shoulder plates, a ragged dark cloak and a long sword held point-down.
+// Simple flat shapes, shaded like the other cut-outs: dark, with a cold moonlit rim.
+float sdSegment(vec2 p, vec2 a, vec2 b) {
+    vec2 pa = p - a, ba = b - a;
+    return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0));
+}
+float sdRoundBox(vec2 p, vec2 centre, vec2 half_, float r) {
+    vec2 q = abs(p - centre) - half_ + r;
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+}
+// A piece narrower at the bottom than at the top (or the other way round).
+float sdTrapezoid(vec2 p, float y0, float y1, float half0, float half1) {
+    float k = clamp((p.y - y0) / (y1 - y0), 0.0, 1.0);
+    return max(abs(p.x) - mix(half0, half1, k), abs(p.y - 0.5 * (y0 + y1)) - 0.5 * (y1 - y0));
+}
+
+// Paint one part: colour c with coverage a over what is already there.
+void part(inout vec4 acc, vec3 c, float a) { acc = mix(acc, vec4(c, 1.0), a); }
+
+vec4 knightLayer(vec2 p, float px) {
+    float facing = knightPose.x;
+    float side = facing < 0.0 ? -1.0 : 1.0;   // -1: we see his back (everything is mirrored)
+    float thin = max(abs(facing), 0.04);       // the turn: the card gets thin, then flips
+
+    // To his own axes: feet at the origin, minus the dip, the rock and the breathing.
+    vec2 q = p - vec2(knightPos.x, knightPose.y);
+    float c = cos(knightPose.z), s = sin(knightPose.z);
+    q = vec2(c * q.x + s * q.y, -s * q.x + c * q.y);
+    q.y /= knightPose.w;
+    q.x /= thin * side;
+    float pxq = px / thin;                     // squeezing him makes his pixels wider
+    bool front = side > 0.0;
+
+    // ---- Colours: blackened steel, a near-black cloak with a dull red lining ----
+    vec3 steel = lin(vec3(0.16, 0.17, 0.20));
+    vec3 moonRim = lin(vec3(0.55, 0.64, 0.85));
+    vec3 cloth = lin(vec3(0.05, 0.05, 0.065));
+    vec3 lining = lin(vec3(0.22, 0.03, 0.04));
+    // Round armour: x across a part says where its surface faces. The moon is ahead of him
+    // (so behind him when he faces us) and to the left: his edges catch the cold light.
+    float moonSide = front ? 0.35 : 1.0;
+
+    // ---- The ragged cloak: hangs from the shoulders, sways with his steps and the wind ----
+    float sway = 0.04 * knightStride + 0.015 * sin(time * 1.3 + q.y * 3.0);
+    vec2 cq = q - vec2(sway * (1.4 - q.y), 0.0);
+    float hem = 0.22 + 0.05 * abs(fract(cq.x * 7.0 + 0.3) - 0.5) * 2.0 + 0.03 * sin(cq.x * 23.0);
+    float dCloak = max(sdTrapezoid(cq, 0.0, 1.38, 0.36, 0.22), hem - cq.y);
+    float aCloak = cover(dCloak, pxq);
+    float fold = 0.75 + 0.25 * sin(cq.x * 28.0 + cq.y * 2.0);
+    vec3 cloakColour = cloth * fold * (0.6 + 0.6 * moonSide);
+    // Seen from the front, only the edges of the cloak show, with the red lining inside.
+    if (front) cloakColour = mix(cloakColour, lining * fold, 0.7);
+
+    // ---- Legs: armoured, one lifts while the other stands ----
+    float liftL = max(knightStride, 0.0) * 0.13;
+    float liftR = max(-knightStride, 0.0) * 0.13;
+    float dLegL = sdSegment(q, vec2(-0.09, 0.85), vec2(-0.10 - 0.02 * knightStride, 0.07 + liftL)) - 0.065;
+    float dLegR = sdSegment(q, vec2( 0.09, 0.85), vec2( 0.10 - 0.02 * knightStride, 0.07 + liftR)) - 0.065;
+    float dFeet = min(sdRoundBox(q, vec2(-0.10, 0.04 + liftL), vec2(0.085, 0.045), 0.03),
+                      sdRoundBox(q, vec2( 0.10, 0.04 + liftR), vec2(0.085, 0.045), 0.03));
+    float dLegs = min(min(dLegL, dLegR), dFeet);
+
+    // ---- Body: plate skirt, breastplate (wide at the shoulders), shoulder plates, helm ----
+    float dSkirt = sdTrapezoid(q, 0.70, 0.96, 0.21, 0.17);
+    float dChest = sdTrapezoid(q, 0.94, 1.40, 0.15, 0.23);
+    vec2 shL = vec2(-0.25, 1.33), shR = vec2(0.25, 1.33);
+    float dShoulders = max(min(length(q - shL), length(q - shR)) - 0.115, 1.22 - q.y);
+    float dHelm = sdRoundBox(q, vec2(0.0, 1.57), vec2(0.105, 0.17), 0.075);
+    float dSlit = max(abs(q.x) - 0.075, abs(q.y - 1.58) - 0.011);
+    float dRidge = max(abs(q.x) - 0.012, abs(q.y - 1.62) - 0.12);   // a raised ridge over the helm
+
+    // ---- The sword: held point-down at his side ----
+    float dBlade = max(abs(q.x - 0.34) - 0.022 * (0.4 + 0.6 * clamp((q.y - 0.12) / 0.2, 0.0, 1.0)),
+                       abs(q.y - 0.52) - 0.42);
+    float dGuard = sdRoundBox(q, vec2(0.34, 0.97), vec2(0.10, 0.018), 0.01);
+    float dGrip = min(max(abs(q.x - 0.34) - 0.018, abs(q.y - 1.06) - 0.08), length(q - vec2(0.34, 1.16)) - 0.03);
+
+    // Shading of one armour part from where x falls across it (-1..1) and how wide it is.
+    #define ARMOUR(halfW, cx) (steel * (0.35 + 0.55 * sqrt(max(1.0 - pow(clamp((q.x - (cx)) / (halfW), -1.0, 1.0), 2.0), 0.0)) * moonSide) \
+        + moonRim * 0.30 * pow(clamp(abs((q.x - (cx)) / (halfW)), 0.0, 1.0), 6.0))
+    vec3 bladeColour = lin(vec3(0.42, 0.46, 0.52)) * (0.6 + 0.6 * moonSide);
+
+    vec4 acc = vec4(0.0);
+    if (front) {
+        part(acc, cloakColour, aCloak);                         // the cloak behind him
+        part(acc, ARMOUR(0.11, sign(q.x) * 0.1), cover(dLegs, pxq));
+        part(acc, ARMOUR(0.20, 0.0) * 0.9, cover(dSkirt, pxq));
+        part(acc, ARMOUR(0.21, 0.0), cover(dChest, pxq));
+        part(acc, ARMOUR(0.12, sign(q.x) * 0.25), cover(dShoulders, pxq));
+        part(acc, ARMOUR(0.105, 0.0), cover(dHelm, pxq));
+        part(acc, ARMOUR(0.03, 0.0) * 1.3, cover(dRidge, pxq) * step(1.6, q.y));
+        part(acc, lin(vec3(0.004)), cover(dSlit, pxq));         // the dark eye slit
+        part(acc, bladeColour, cover(dBlade, pxq));
+        part(acc, ARMOUR(0.1, 0.34), cover(min(dGuard, dGrip), pxq));
+    } else {
+        part(acc, ARMOUR(0.11, sign(q.x) * 0.1), cover(dLegs, pxq));
+        part(acc, ARMOUR(0.21, 0.0), cover(min(dChest, dSkirt), pxq));
+        part(acc, bladeColour, cover(dBlade, pxq));
+        part(acc, ARMOUR(0.1, 0.34), cover(min(dGuard, dGrip), pxq));
+        part(acc, cloakColour, aCloak);                         // the cloak covers his back
+        part(acc, ARMOUR(0.12, sign(q.x) * 0.25), cover(dShoulders, pxq));
+        part(acc, ARMOUR(0.105, 0.0), cover(dHelm, pxq));
+        part(acc, ARMOUR(0.03, 0.0) * 1.3, cover(dRidge, pxq) * step(1.6, q.y));
+    }
+    #undef ARMOUR
+
+    // The gate's warm light reaches him when he gets close.
+    float warm = exp(-max(D_CASTLE - (-knightPos.z), 0.0) / 14.0);
+    acc.rgb += acc.rgb * lin(vec3(1.0, 0.62, 0.28)) * 3.0 * warm;
+    return acc;
+}
+
 // ---------------------------------------------------------------------------
 // The ground: dark grass, and a dirt trail with two wheel ruts that leads to the gate.
 // ---------------------------------------------------------------------------
@@ -259,6 +381,10 @@ vec3 groundColour(vec3 gp, float t) {
     // Warm light from the gate spilling down the trail, in the last 25 metres.
     float spill = exp(-max(D_CASTLE - s, 0.0) / 16.0) * step(s, D_CASTLE + 6.0);
     c += lin(vec3(1.0, 0.55, 0.25)) * 0.5 * spill * exp(-dx * dx / (hw * hw * 5.0));
+
+    // A soft dark spot under the knight, so he stands on the ground instead of floating.
+    vec2 k = (gp.xz - knightPos.xz) * vec2(1.0, 1.4);
+    c *= 1.0 - 0.6 * exp(-dot(k, k) / 0.16);
     return c;
 }
 
@@ -275,10 +401,17 @@ void layerPoint(float D, vec3 ro, vec3 rd, out float t, out vec2 p, out float px
     px = max(length(fwidth(p)), 1e-4) * 0.75;
 }
 
+// Where the ray meets the knight's plane, and his cut-out painted over the picture.
+void paintKnight(inout vec3 col, vec3 ro, vec3 rd) {
+    float t, px; vec2 p;
+    layerPoint(-knightPos.z, ro, rd, t, p, px);
+    if (t > 0.0 && p.y >= 0.0) { vec4 l = knightLayer(p, px); col = mix(col, withFog(l.rgb, t), l.a); }
+}
+
 void main() {
-    // The camera: it stands at camPos and always looks at the castle.
+    // The camera: it stands at camPos and looks at camTarget.
     vec3 ro = camPos;
-    vec3 forward = normalize(vec3(0.0, 21.0, -D_CASTLE) - ro);
+    vec3 forward = normalize(camTarget - ro);
     vec3 right = normalize(cross(forward, vec3(0.0, 1.0, 0.0)));
     vec3 up = cross(right, forward);
     float aspect = resolution.x / resolution.y;
@@ -294,7 +427,11 @@ void main() {
         col = withFog(g, fogT);
     }
 
-    // 2. The cut-outs, from far to near. A cut-out only shows above the ground (p.y >= 0).
+    // 2. The cut-outs, from far to near. A cut-out only shows above the ground (p.y >= 0)
+    //    and in front of the camera (t > 0). The knight is painted just before the first
+    //    layer that is nearer than he is.
+    float kd = -knightPos.z;
+    bool knightDone = false;
     float t, px; vec2 p;
     layerPoint(D_MOUNTAIN, ro, rd, t, p, px);
     if (t > 0.0 && p.y >= 0.0) { vec4 l = mountainLayer(p, px); col = mix(col, withFog(l.rgb, t), l.a); }
@@ -306,21 +443,25 @@ void main() {
     if (t > 0.0 && p.y >= 0.0) { vec4 l = castleLayer(p, px); col = mix(col, withFog(l.rgb, t), l.a); }
 
     // Trees stand to the sides and leave the castle and the trail free.
+    if (!knightDone && kd > D_FOREST) { paintKnight(col, ro, rd); knightDone = true; }
     layerPoint(D_FOREST, ro, rd, t, p, px);
     if (t > 0.0 && p.y >= 0.0) {
         vec4 l = pineLayer(p, px, 4.5, 8.0, 18.0, 1.0, 0.0, 36.0, 0.95, lin(vec3(0.025, 0.04, 0.06)));
         col = mix(col, withFog(l.rgb, t), l.a);
     }
+    if (!knightDone && kd > D_MID) { paintKnight(col, ro, rd); knightDone = true; }
     layerPoint(D_MID, ro, rd, t, p, px);
     if (t > 0.0 && p.y >= 0.0) {
         vec4 l = pineLayer(p, px, 7.0, 9.0, 18.0, 2.0, pathX(D_MID), 13.0, 0.8, lin(vec3(0.015, 0.025, 0.04)));
         col = mix(col, withFog(l.rgb, t), l.a);
     }
+    if (!knightDone && kd > D_NEAR) { paintKnight(col, ro, rd); knightDone = true; }
     layerPoint(D_NEAR, ro, rd, t, p, px);
     if (t > 0.0 && p.y >= 0.0) {
         vec4 l = pineLayer(p, px, 9.0, 12.0, 22.0, 3.0, pathX(D_NEAR), 5.5, 0.75, lin(vec3(0.008, 0.013, 0.022)));
         col = mix(col, withFog(l.rgb, t), l.a);
     }
+    if (!knightDone) { paintKnight(col, ro, rd); knightDone = true; }
     layerPoint(D_GRASS, ro, rd, t, p, px);
     if (t > 0.0 && p.y >= 0.0) {
         vec4 l = grassLayer(p, px, pathX(D_GRASS), pathHalfWidth(D_GRASS) + 0.3);
