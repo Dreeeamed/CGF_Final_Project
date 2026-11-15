@@ -126,13 +126,13 @@ void gothicPillar(Vertices& v, const glm::mat4& instance, float height) {
 void castleWallEnd(Vertices& v, float faceX) {
     const float back = faceX - 3.0f, height = 14.0f;
     const float z0 = layout::backZ, z1 = layout::frontZ;
-    box(v, {back, 0, z0}, {faceX, height, z1}, Curb);
+    box(v, {back, 0, z0}, {faceX, height, z1}, CastleStone);
     // A gold band, like the rings on the castle's columns.
     box(v, {faceX, 9.8f, z0}, {faceX + 0.06f, 10.0f, z1}, Gold);
     box(v, {back, 9.8f, z1}, {faceX + 0.06f, 10.0f, z1 + 0.06f}, Gold);
     // Battlements: merlons along the top, 1 m wide, 1 m apart.
     for (float z = z0 + 0.5f; z + 1.0f <= z1; z += 2.0f)
-        box(v, {back, height, z}, {faceX, height + 1.2f, z + 1.0f}, Curb);
+        box(v, {back, height, z}, {faceX, height + 1.2f, z + 1.0f}, CastleStone);
 
     // The doorway in the garden face, centred on the walking line: two stone jambs
     // standing out of the wall, a pointed arch outline on top, and the dark opening.

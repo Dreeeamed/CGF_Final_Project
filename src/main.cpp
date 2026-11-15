@@ -245,7 +245,7 @@ int main(int argc, char* argv[]) {
         glfwDestroyWindow(window); glfwTerminate(); return 1;
     }
     // Texture unit numbers: 0 colour, 1 height map, 2 normal map.
-    for (GLuint program : {stoneProgram, hallProgram}) {
+    for (GLuint program : {stoneProgram, hallProgram, gardenProgram}) {
         glUseProgram(program);
         glUniform1i(glGetUniformLocation(program, "stoneTexture"), 0);
         glUniform1i(glGetUniformLocation(program, "heightMap"), 1);
