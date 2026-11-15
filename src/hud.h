@@ -16,6 +16,8 @@ public:
     void text(float x, float y, const std::string& s, const glm::vec4& colour);
     float width(const std::string& s);   // size of the text in pixels
     float height(const std::string& s);
+    void setScale(float s) { scale = s; }
+    float getScale() const { return scale; }
     void end();                          // switch back to 3D drawing
     void destroy();
 
@@ -25,5 +27,5 @@ private:
 
     GLuint program = 0, vao = 0, vbo = 0;
     GLboolean cullingWasOn = GL_FALSE;   // end() restores the culling state of the 3D scene
-    const float scale = 2.0f;            // the font is tiny: 1 font pixel = 2 screen pixels
+    float scale = 2.0f;            // the font is tiny: 1 font pixel = 2 screen pixels
 };

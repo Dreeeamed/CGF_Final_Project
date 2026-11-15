@@ -24,7 +24,10 @@ uniform float gateLift;           // 0 = gate closed, 1 = fully raised
 
 // Material numbers, the same order as `enum Material` in hall_geometry.h.
 const int STONE = 0, FLOOR = 1, DARKNESS = 2, BANNER = 3, CARPET = 4, BRASS = 5,
-          FLAME = 6, WINDOW = 7, DOOR = 8, BEAM = 9, KNIGHT = 10, WALL = 11, GARDEN = 12;
+          FLAME = 6, WINDOW = 7, DOOR = 8, BEAM = 9, KNIGHT = 10, WALL = 11, GARDEN = 12,
+          MARBLE = 13, GOLD = 14, BANNER_RED = 15, BANNER_PURPLE = 16, CRYSTAL = 17,
+          MAGIC = 18, BANNER_GIANT = 19,
+          DARK_STEEL = 20, CLOAK = 21, CLOAK_LINING = 22, BLADE = 23;   // the dark knight
 
 // ---------------------------------------------------------------------------
 // Wall axes
@@ -115,6 +118,78 @@ float parallaxShadow(vec2 uv, float hitDepth, vec3 lightTS, vec2 dx, vec2 dy) {
 // Other materials
 // ---------------------------------------------------------------------------
 
+// Lesson 16: marble veins from "value noise".
+// hash3: a pseudo-random number 0..1 for every whole-metre point of space.
+float hash3(vec3 p) {
+    return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+}
+
+// noise3: the 8 random numbers at the corners of the 1 m cube around p, blended smoothly.
+// The result changes softly through space, like clouds (not like TV static).
+float noise3(vec3 p) {
+    vec3 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);   // smooth step between the corners
+    return mix(mix(mix(hash3(i),                  hash3(i + vec3(1, 0, 0)), f.x),
+                   mix(hash3(i + vec3(0, 1, 0)),  hash3(i + vec3(1, 1, 0)), f.x), f.y),
+               mix(mix(hash3(i + vec3(0, 0, 1)),  hash3(i + vec3(1, 0, 1)), f.x),
+                   mix(hash3(i + vec3(0, 1, 1)),  hash3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+
+// Thin pale veins: stripes of sin(), bent by noise of three sizes.
+// 1.0 on a vein, 0.0 on the dark stone between them.
+float marbleVeins(vec3 p) {
+    float bend = noise3(p * 0.35) * 0.6 + noise3(p * 0.9) * 0.3 + noise3(p * 2.3) * 0.1;
+    float stripes = abs(sin(p.x * 0.55 + p.y * 0.8 + p.z * 0.45 + bend * 7.0));
+    return pow(1.0 - stripes, 14.0) * 0.7 + pow(1.0 - stripes, 60.0) * 0.5;   // wide glow + sharp line
+}
+
+// Lesson 17: our own coat of arms on the long banners - a ring, a four-pointed star and
+// three crown points - plus gold borders. Returns 1 on gold, 0 on cloth.
+// Each shape is a "distance": below 0 inside the shape, above 0 outside. min() of two
+// distances is both shapes together. p is measured in banner widths from the sigil centre.
+float sigil(float width, float height) {
+    vec2 p = vec2((UV.x - 0.5) * width, (UV.y - 0.70) * height) / width;
+    float aa = 1.5 * fwidth(p.x);                            // a soft edge, about one pixel wide
+    float ring = abs(length(p) - 0.30) - 0.035;              // a circle line, radius 0.30
+    vec2 q = abs(p);                                         // the star is the same in all 4 quarters
+    float star = (min(q.x / 0.10 + q.y / 0.42, q.x / 0.42 + q.y / 0.10) - 1.0) * 0.08;
+    float crown = 1.0;
+    for (int i = -1; i <= 1; i++) {                          // three small spikes above the ring
+        vec2 c = p - vec2(float(i) * 0.17, 0.43 - 0.05 * abs(float(i)));
+        crown = min(crown, max(abs(c.x) * 2.6 + c.y, -c.y - 0.06) - 0.07);
+    }
+    float shape = min(min(ring, star), crown);
+    float edgeX = min(UV.x, 1.0 - UV.x) * width;             // metres from the nearest side edge
+    float border = step(edgeX, 0.22) + step(1.0 - UV.y, 0.012);
+    float line = step(abs(edgeX - 0.55), 0.05);              // a thin gold line inside the border
+    return clamp(1.0 - smoothstep(-aa, aa, shape) + border + line, 0.0, 1.0);
+}
+
+// Lesson 19: 1 on a line of the given half width, 0 away from it, soft over one pixel (aa).
+float softLine(float distance, float halfWidth, float aa) {
+    return 1.0 - smoothstep(halfWidth, halfWidth + aa, abs(distance));
+}
+
+// Lesson 19: the magic circle on the floor in front of the stairs (centre x = 56):
+// two rings, a band of rune dashes and a five-pointed star. 1 on a line, 0 elsewhere.
+float magicCircle(vec3 p) {
+    vec2 d = p.xz - vec2(56.0, 0.0);                 // from the centre, in metres
+    float r = length(d);
+    float aa = fwidth(r) * 1.5 + 0.01;
+    float rings = softLine(r - 7.0, 0.08, aa) + softLine(r - 5.6, 0.05, aa);
+    // Runes: a band of dashes; atan gives the angle, fract cuts it into 24 pieces.
+    float a = atan(d.y, d.x);
+    float runes = softLine(r - 6.3, 0.28, aa) * step(0.55, fract(a * 24.0 / 6.2832 + 0.25 * sin(a * 7.0)));
+    // The star: 5 straight lines, each 0.309 * 5.6 m from the centre (the chords of a pentagon).
+    float star = 0.0;
+    for (int k = 0; k < 5; k++) {
+        float t = 1.5708 + float(k) * 1.2566;        // 90 degrees + k * 72 degrees
+        star += softLine(dot(d, vec2(cos(t), sin(t))) - 0.309 * 5.6, 0.05, aa);
+    }
+    star *= step(r, 5.6);                            // only inside the inner ring
+    return clamp(rings + runes * 0.8 + star, 0.0, 1.0);
+}
+
 // Large, soft brightness variation of plain stone (triplanar: no UVs needed). Not POM.
 float stoneVariation(vec3 p, vec3 n) {
     vec3 weights = pow(abs(n), vec3(4.0));
@@ -204,22 +279,54 @@ void shade() {
     float variation = stoneVariation(FragPos, n);
     vec3 base = vec3(0.31, 0.40, 0.53) * variation;   // plain stone: columns, frames, galleries
     float specularStrength = 0.07;
+    float shininess = 40.0;                          // lesson 16: bigger = smaller, sharper highlight
+    vec3 specularColour = vec3(0.40, 0.52, 0.67);    // lesson 16: cool moonlight; gold reflects warm
+    vec3 emission = vec3(0.0);                       // lesson 19: light the surface gives off itself
     if (Material == WALL) {
         base = wallColour;
         specularStrength = 0.15;
     }
     if (Material == FLOOR) {
-        // Large quartz-grey slabs, with subtle joints in world metres.
-        vec2 q = FragPos.xz / 3.0;
+        // Lesson 16: polished black marble slabs, 4 x 4 m, with thin gold lines between them.
+        vec2 q = FragPos.xz / 4.0;                   // position in slabs
         vec2 f = fract(q);
-        vec2 edge = min(f, 1.0 - f);
-        vec2 aa = max(fwidth(q), vec2(0.0001));
-        float joint = min(smoothstep(vec2(0.008), vec2(0.008) + aa, edge).x,
-                          smoothstep(vec2(0.008), vec2(0.008) + aa, edge).y);
-        float checker = mod(floor(q.x) + floor(q.y), 2.0);
-        base = mix(vec3(0.12, 0.15, 0.20), vec3(0.27, 0.33, 0.41) * (0.96 + checker * 0.04), joint);
-        base *= 0.93 + 0.07 * variation;
-        specularStrength = 0.18;
+        vec2 edge = min(f, 1.0 - f);                 // distance to the nearest joint
+        vec2 aa = max(fwidth(q), vec2(0.0001));      // one pixel, measured in slabs: soft, no flicker
+        float slab = min(smoothstep(vec2(0.008), vec2(0.008) + aa, edge).x,
+                         smoothstep(vec2(0.008), vec2(0.008) + aa, edge).y);   // 0 on a joint
+        float checker = mod(floor(q.x) + floor(q.y), 2.0);   // every other slab a little lighter
+        vec3 marble = mix(vec3(0.035, 0.035, 0.045), vec3(0.20, 0.19, 0.18),
+                          checker * 0.25 + marbleVeins(FragPos) * 0.6);
+        base = mix(vec3(0.62, 0.45, 0.17), marble, slab);
+        specularStrength = 0.5;
+        shininess = 120.0;
+        emission = vec3(0.62, 0.26, 1.0) * magicCircle(FragPos) * 1.6;   // lesson 19
+    }
+    if (Material == MARBLE) {
+        // Lesson 16: polished black marble with pale veins (columns).
+        base = mix(vec3(0.04, 0.04, 0.05), vec3(0.32, 0.31, 0.30), marbleVeins(FragPos));
+        specularStrength = 0.7;
+        shininess = 90.0;
+    }
+    if (Material == BANNER_RED || Material == BANNER_PURPLE) {
+        // Lesson 17: long banners, deep red and royal purple, with the gold sigil.
+        vec3 cloth = Material == BANNER_RED ? vec3(0.34, 0.025, 0.045) : vec3(0.16, 0.035, 0.26);
+        float folds = 0.85 + 0.15 * sin(UV.x * 40.0);
+        base = mix(cloth * folds, vec3(0.78, 0.56, 0.22), sigil(4.0, 28.5));
+        specularStrength = 0.0;
+    }
+    if (Material == BANNER_GIANT) {
+        // Lesson 19: the giant black banner behind the throne, with a big gold sigil.
+        float folds = 0.85 + 0.15 * sin(UV.x * 60.0);
+        base = mix(vec3(0.05, 0.04, 0.06) * folds, vec3(0.78, 0.56, 0.22), sigil(16.0, 44.5));
+        specularStrength = 0.0;
+    }
+    if (Material == GOLD) {
+        // Lesson 16: gold trims and ribs. Metal: the highlight takes the colour of the metal.
+        base = vec3(0.62, 0.45, 0.17);
+        specularStrength = 1.0;
+        shininess = 60.0;
+        specularColour = vec3(1.0, 0.80, 0.45);
     }
     if (Material == BANNER) {
         // Dark red cloth with a gold border and a gold crest.
@@ -250,6 +357,18 @@ void shade() {
         FragColor = vec4(vec3(1.0, 0.72, 0.31) * 3.0 * (0.94 + 0.06 * sin(time * 4.0 + FragPos.x)), 1.0);
         return;
     }
+    if (Material == CRYSTAL) {
+        // Lesson 18: cut crystal catches the candle light, brighter than white (it glows).
+        // Some facets flash: a random number per 1/6 m cell, new 3 times a second.
+        float sparkle = step(0.93, hash3(floor(FragPos * 6.0) + floor(time * 3.0)));
+        FragColor = vec4(vec3(1.0, 0.94, 0.84) * (1.1 + 1.5 * sparkle), 1.0);
+        return;
+    }
+    if (Material == MAGIC) {
+        // Lesson 19: purple magic fire, brighter than white, flickering.
+        FragColor = vec4(vec3(0.62, 0.26, 1.0) * 2.2 * (0.9 + 0.1 * sin(time * 7.0 + FragPos.y * 3.0)), 1.0);
+        return;
+    }
     if (Material == WINDOW) {
         FragColor = vec4(vec3(0.48, 0.63, 0.76) * 1.3, 1.0);   // night sky behind the glass; lesson 15: glows a little
         return;
@@ -262,21 +381,56 @@ void shade() {
         base = vec3(0.72, 0.79, 0.83);   // polished steel
         specularStrength = 0.45;
     }
+    // The dark knight: blackened plate, a near-black cloak with a dull red lining, a bright blade.
+    // The same colours as the knight cut-out in intro.frag.
+    if (Material == DARK_STEEL) {
+        base = vec3(0.16, 0.17, 0.20);
+        specularStrength = 0.6;
+        shininess = 60.0;
+    }
+    if (Material == CLOAK) {
+        base = vec3(0.05, 0.05, 0.065) * (0.8 + 0.2 * sin(FragPos.x * 90.0));   // folds
+        specularStrength = 0.0;
+    }
+    if (Material == CLOAK_LINING) {
+        base = vec3(0.22, 0.03, 0.04) * (0.8 + 0.2 * sin(FragPos.x * 90.0));
+        specularStrength = 0.0;
+    }
+    if (Material == BLADE) {
+        base = vec3(0.42, 0.46, 0.52);
+        specularStrength = 0.9;
+        shininess = 80.0;
+    }
 
     // ---- Light --------------------------------------------------------------
     vec3 keyDir = normalize(lightDir);
     vec3 viewDir = normalize(cameraPos - FragPos);
     float diffuse = max(dot(n, keyDir), 0.0) * wallShadow;       // Lambert, darkened by POM shadow
     float rim = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0) * 0.10;   // thin light on the edges
-    vec3 colour = base * (vec3(0.14, 0.17, 0.24) + vec3(1.10, 1.12, 1.18) * diffuse + rim);
-    float spec = pow(max(dot(n, normalize(keyDir + viewDir)), 0.0), 40.0) * wallShadow;   // Blinn-Phong
-    colour += vec3(0.40, 0.52, 0.67) * spec * specularStrength;
+    vec3 colour = base * (vec3(0.084, 0.102, 0.144) + vec3(0.770, 0.784, 0.826) * diffuse + rim);
+    float spec = pow(max(dot(n, normalize(keyDir + viewDir)), 0.0), shininess) * wallShadow;   // Blinn-Phong
+    colour += specularColour * spec * specularStrength;
 
-    // A warm local pool below the chandelier, against the cool high windows.
-    vec3 toLamp = vec3(0, 31, 0) - FragPos;
-    float warm = 1.0 / (1.0 + dot(toLamp, toLamp) * 0.0025);
-    float lampDiffuse = max(dot(n, normalize(toLamp)), 0.0);
-    colour += base * vec3(0.95, 0.42, 0.11) * warm * (0.12 + lampDiffuse);
+    // Lesson 18: five crystal chandeliers = five warm point lights, at the same x as in
+    // Hall::build (-64, -32, 0, 32, 64), 35 m high. Each one: Lambert + Blinn-Phong,
+    // weaker with distance (1 / (1 + k d^2)). Cold moonlight + warm candles = dark fantasy.
+    for (int i = 0; i < 5; i++) {
+        vec3 toLamp = vec3(-64.0 + 32.0 * float(i), 35.0, 0.0) - FragPos;
+        float fade = 1.3 / (1.0 + dot(toLamp, toLamp) * 0.004);
+        vec3 L = normalize(toLamp);
+        float lambert = max(dot(n, L), 0.0);
+        float shine = pow(max(dot(n, normalize(L + viewDir)), 0.0), shininess);
+        colour += vec3(1.0, 0.62, 0.30) * fade * (base * (0.08 + lambert) + shine * specularStrength);
+    }
+    // Lesson 19: purple magic light: the two braziers and a glow above the throne.
+    const vec3 magicLights[3] = vec3[](vec3(62.0, 5.5, -6.0), vec3(62.0, 5.5, 6.0), vec3(95.0, 13.0, 0.0));
+    for (int i = 0; i < 3; i++) {
+        vec3 toFire = magicLights[i] - FragPos;
+        float fade = 1.4 / (1.0 + dot(toFire, toFire) * 0.012);
+        float lambert = max(dot(n, normalize(toFire)), 0.0);
+        colour += vec3(0.62, 0.26, 1.0) * fade * base * (0.1 + lambert);
+    }
+    colour += emission;   // lesson 19: glowing lines are not lit, they shine
 
     // Fog depends mostly on depth into the hall; zooming out won't erase the scene.
     float depth = clamp((-FragPos.z + 5.0) / 60.0, 0.0, 1.0);

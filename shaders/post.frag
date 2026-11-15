@@ -19,13 +19,16 @@ vec3 aces(vec3 x) {
 // Lesson 15: glow (bloom). The mipmaps are blurred copies of the picture: level 2 is
 // 1/4 of the size, level 6 is 1/64. Only light brighter than `threshold` spills over,
 // a little from every level: narrow glow near the light, wide soft glow further out.
+// Lesson 16: the threshold is taken from the brightest channel and the colour is kept.
+// (Subtracting it from r, g, b one by one turned orange gold and fire into red.)
 const float threshold = 0.5;
 const float glowStrength = 0.8;
 vec3 glow(vec2 p) {
     vec3 sum = vec3(0.0);
     for (int level = 2; level <= 6; level++) {
         vec3 blurred = textureLod(scene, p, float(level)).rgb;
-        sum += max(blurred - threshold, 0.0);
+        float brightness = max(blurred.r, max(blurred.g, blurred.b));
+        sum += blurred * (max(brightness - threshold, 0.0) / max(brightness, 0.0001));
     }
     return sum;
 }

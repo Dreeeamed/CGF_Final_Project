@@ -37,6 +37,7 @@ target_link_libraries(glad PRIVATE ${CMAKE_DL_LIBS})
 
 add_executable(simple_castle
     src/main.cpp
+    src/intro.cpp
     src/castle_geometry.cpp
     src/garden_decor.cpp
     src/garden_fountain.cpp
@@ -48,6 +49,7 @@ add_executable(simple_castle
     src/material.cpp
     src/hud.cpp
     src/post.cpp
+    src/dust.cpp
 )
 target_include_directories(simple_castle PRIVATE src third_party/stb)
 target_link_libraries(simple_castle PRIVATE glfw glad::glad glm::glm)
