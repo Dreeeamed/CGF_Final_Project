@@ -36,7 +36,8 @@ static_assert(archHalfWidth > 2.9f, "The high windows and their rims must fit in
 }
 
 enum Material { Stone, Floor, Darkness, Banner, Carpet, Brass, Flame, Window, Door, Beam, Knight, Wall,
-                Garden, Marble, Gold, BannerRed, BannerPurple };
+                Garden, Marble, Gold, BannerRed, BannerPurple,
+                DarkSteel, Cloak, CloakLining, Blade };   // the dark knight
 
 struct Vertex {
     glm::vec3 position;
@@ -57,7 +58,7 @@ struct Hall {
     Mesh architecture;
     Mesh foreground; // The complete second column row and its wall / gallery.
     Mesh lightShafts;
-    Mesh knight;     // A 1.5 m scale marker, not the final character.
+    Mesh knight;     // The dark knight, about 1.75 m tall, standing at the origin, facing +Z.
     Mesh grille;     // The portcullis of the entrance gate: it moves up when opened.
     Mesh key;        // The golden key, centred on the origin so it can spin in place.
     void build();

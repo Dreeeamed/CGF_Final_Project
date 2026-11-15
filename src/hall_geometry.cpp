@@ -98,6 +98,95 @@ void rod(Vertices& v, glm::vec3 a, glm::vec3 b, float radius, Material m = Brass
     }
 }
 
+// A capped frustum with an oval cross-section: half-widths rx (along X) and rz (along Z),
+// at the bottom (0) and at the top (1). Like cylinder(), but a body is not as deep as it is wide.
+void ovalFrustum(Vertices& v, glm::vec3 bottom, float height, float rx0, float rz0,
+                 float rx1, float rz1, Material material, int segments = 24) {
+    const glm::vec3 top = bottom + glm::vec3(0, height, 0);
+    const float m = float(material);
+    const float slope = ((rx0 + rz0) - (rx1 + rz1)) * 0.5f / height;   // the side leans in by this much
+    for (int i = 0; i < segments; ++i) {
+        const float a = 2.0f * pi * i / segments;
+        const float b = 2.0f * pi * (i + 1) / segments;
+        const glm::vec3 p0 = bottom + glm::vec3(rx0 * std::cos(a), 0, rz0 * std::sin(a));
+        const glm::vec3 p1 = bottom + glm::vec3(rx0 * std::cos(b), 0, rz0 * std::sin(b));
+        const glm::vec3 p2 = top + glm::vec3(rx1 * std::cos(b), 0, rz1 * std::sin(b));
+        const glm::vec3 p3 = top + glm::vec3(rx1 * std::cos(a), 0, rz1 * std::sin(a));
+        // The normal of an ellipse at angle t points along (cos t / rx, sin t / rz).
+        const glm::vec3 na = glm::normalize(glm::vec3(std::cos(a) / rx0, slope, std::sin(a) / rz0));
+        const glm::vec3 nb = glm::normalize(glm::vec3(std::cos(b) / rx0, slope, std::sin(b) / rz0));
+        v.insert(v.end(), {
+            {p0, na, {0, 0}, m}, {p3, na, {0, 1}, m}, {p2, nb, {1, 1}, m},
+            {p0, na, {0, 0}, m}, {p2, nb, {1, 1}, m}, {p1, nb, {1, 0}, m}});
+        triangle(v, bottom, p0, p1, material);
+        triangle(v, top, p2, p3, material);
+    }
+}
+
+// A ball. Every triangle is turned to face outwards, away from the centre.
+void ball(Vertices& v, glm::vec3 centre, float radius, Material material, int rings = 8, int segments = 16) {
+    auto point = [&](int i, int j) {
+        const float t = pi * i / rings, f = 2.0f * pi * j / segments;
+        return centre + radius * glm::vec3(std::sin(t) * std::cos(f), std::cos(t), std::sin(t) * std::sin(f));
+    };
+    auto outward = [&](glm::vec3 a, glm::vec3 b, glm::vec3 c) {
+        if (glm::dot(glm::cross(b - a, c - a), (a + b + c) / 3.0f - centre) < 0.0f) std::swap(b, c);
+        triangle(v, a, b, c, material);
+    };
+    for (int i = 0; i < rings; ++i)
+        for (int j = 0; j < segments; ++j) {
+            const glm::vec3 a = point(i, j), b = point(i, j + 1), c = point(i + 1, j + 1), d = point(i + 1, j);
+            if (i > 0) outward(a, b, c);              // the top ring has no upper triangle
+            if (i < rings - 1) outward(a, c, d);      // the bottom ring has no lower triangle
+        }
+}
+
+// ---------------------------------------------------------------------------
+// The dark knight: an original design, about 1.75 m tall, feet at the origin, facing +Z
+// (towards the 2.5D camera). Blackened plate armour, a closed round-topped helm with one
+// eye slit, round shoulder plates, a ragged cloak and a long sword held point-down.
+// The intro draws the same figure as a flat cut-out (knightLayer in intro.frag).
+// ---------------------------------------------------------------------------
+void darkKnight(Vertices& v) {
+    // Legs and feet.
+    for (float x : {-0.09f, 0.09f}) {
+        cylinder(v, {x, 0.07f, 0}, 0.78f, 0.065f, 0.072f, DarkSteel, 16);
+        box(v, {x - 0.075f, 0.0f, -0.06f}, {x + 0.075f, 0.09f, 0.13f}, DarkSteel);
+    }
+    // Plate skirt, breastplate (wide at the shoulders), round shoulder plates.
+    ovalFrustum(v, {0, 0.70f, 0}, 0.26f, 0.21f, 0.14f, 0.17f, 0.12f, DarkSteel);
+    ovalFrustum(v, {0, 0.94f, 0}, 0.46f, 0.15f, 0.11f, 0.23f, 0.14f, DarkSteel);
+    ball(v, {-0.25f, 1.33f, 0}, 0.115f, DarkSteel);
+    ball(v, { 0.25f, 1.33f, 0}, 0.115f, DarkSteel);
+    // The helm: a short round barrel with a dome, a ridge over the top and a dark eye slit.
+    ovalFrustum(v, {0, 1.40f, 0}, 0.22f, 0.105f, 0.115f, 0.105f, 0.115f, DarkSteel, 20);
+    ball(v, {0, 1.62f, 0}, 0.108f, DarkSteel, 6, 20);
+    box(v, {-0.012f, 1.66f, -0.075f}, {0.012f, 1.74f, 0.075f}, DarkSteel);
+    box(v, {-0.075f, 1.569f, 0.095f}, {0.075f, 1.591f, 0.122f}, Darkness);
+
+    // The cloak: hangs from the shoulders behind him and flares out, with a ragged hem.
+    // Two layers back to back: the red lining faces us (+Z), the black cloth faces away.
+    const int strips = 14;
+    for (int i = 0; i < strips; ++i) {
+        auto edge = [&](int k, bool atTop) {
+            const float u = float(k) / strips * 2.0f - 1.0f;   // -1..1 across the cloak
+            if (atTop) return glm::vec3(u * 0.22f, 1.38f, -0.15f);
+            const float rag = (k % 2 ? 0.07f : 0.0f) + 0.02f * std::sin(u * 23.0f);   // torn points
+            return glm::vec3(u * 0.36f, 0.22f + rag, -0.24f);
+        };
+        const glm::vec3 b0 = edge(i, false), b1 = edge(i + 1, false), t1 = edge(i + 1, true), t0 = edge(i, true);
+        quad(v, b0, b1, t1, t0, CloakLining);          // faces +Z: the lining, seen past his sides
+        quad(v, b0, b1, t1, t0, Cloak, true);          // faces -Z: the outside of the cloak
+    }
+
+    // The long sword at his right side, point down.
+    box(v, {0.318f, 0.20f, 0.044f}, {0.362f, 0.955f, 0.056f}, Blade);    // blade
+    rod(v, {0.34f, 0.20f, 0.05f}, {0.34f, 0.11f, 0.05f}, 0.012f, Blade); // the narrow point
+    box(v, {0.24f, 0.955f, 0.03f}, {0.44f, 0.985f, 0.07f}, DarkSteel);  // crossguard
+    rod(v, {0.34f, 0.985f, 0.05f}, {0.34f, 1.14f, 0.05f}, 0.018f, Cloak); // wrapped grip
+    ball(v, {0.34f, 1.16f, 0.05f}, 0.03f, DarkSteel, 6, 10);             // pommel
+}
+
 // ---------------------------------------------------------------------------
 // Parts of the hall
 // ---------------------------------------------------------------------------
@@ -474,12 +563,7 @@ void Hall::build() {
         quad(light, {x - halfWidth, 0.1f, 1}, {x + halfWidth, 0.1f, 1},
                     {x + 2.1f, 54.5f, -19.2f}, {x - 2.1f, 54.5f, -19.2f}, Beam);
     }
-    // An original, deliberately simple knight silhouette for scale only.
-    triangle(marker, {-0.32f, 0, 0.15f}, {0.32f, 0, 0.15f}, {0, 1.1f, 0.15f}, Banner);
-    cylinder(marker, {0, 0.85f, 0}, 0.48f, 0.20f, 0.17f, Knight, 32);
-    cylinder(marker, {0, 1.33f, 0}, 0.17f, 0.17f, 0.015f, Brass, 32);
-    box(marker, {-0.16f, 1.11f, 0.173f}, {0.16f, 1.16f, 0.19f}, Darkness);
-    rod(marker, {0.35f, 0.2f, 0}, {0.35f, 0.95f, 0}, 0.025f, Knight);
+    darkKnight(marker);   // the player character (the same design as in the intro)
     architecture.upload(v);
     foreground.upload(front);
     lightShafts.upload(light);
