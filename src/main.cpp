@@ -756,7 +756,7 @@ int main(int argc, char* argv[]) {
             }
         }
     }
-
+	//the end of the program: clean up the resources we created
     intro.destroy();
     dust.destroy();
     post.destroy();
