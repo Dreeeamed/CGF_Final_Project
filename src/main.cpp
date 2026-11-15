@@ -326,7 +326,7 @@ int main(int argc, char* argv[]) {
     const char* captures[] = {"hall-centre.ppm", "hall-overview.ppm", "hall-entrance.ppm",
                               "hall-throne.ppm", "hall-full-row.ppm", "exterior.ppm",
                               "hall-closeup.ppm", "hall-garden.ppm", "garden.ppm", "garden-flowers.ppm",
-                              "garden-benches.ppm"};
+                              "garden-benches.ppm", "garden-entrance.ppm"};
     std::cout << consoleHelp;
 
     while (!glfwWindowShouldClose(window)) {
@@ -501,6 +501,9 @@ int main(int argc, char* argv[]) {
                 if (renderedFrames == 10) {   // the resting area with its benches
                     gardenCameraX = royal_garden::layout::benchBranchX; gardenDistance = 13.0f;
                 }
+                if (renderedFrames == 11) {   // the entrance: castle wall, doorway, pillars
+                    gardenCameraX = royal_garden::layout::startX + 5.0f; gardenDistance = 18.0f;
+                }
             } else {
                 if (renderedFrames == 1) showForeground = true;
                 if (renderedFrames == 2) { insideHall = false; distance = 14; lookHeight = 3.5f; }
@@ -635,7 +638,7 @@ int main(int argc, char* argv[]) {
             if (error != GL_NO_ERROR) {
                 std::cerr << "OpenGL smoke test failed: " << error << '\n'; exitCode = 1; break;
             }
-            if (++renderedFrames == (capture ? 11 : 4)) {
+            if (++renderedFrames == (capture ? 12 : 4)) {
                 std::cout << "Smoke test passed: " << renderedFrames << " frames rendered.\n";
                 break;
             }

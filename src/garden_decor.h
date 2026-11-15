@@ -10,4 +10,11 @@ void bench(Vertices& v, const glm::mat4& instance);
 
 // A gothic lantern on an iron post, about 2.7 m tall, standing on y = 0.
 void lantern(Vertices& v, const glm::mat4& instance);
+
+// A tall gothic pillar with gold bands and a pointed pinnacle, standing on y = 0.
+void gothicPillar(Vertices& v, const glm::mat4& instance, float height);
+
+// The end of the castle wall that closes the garden on the left, with the dark
+// pointed doorway the knight came through. Its garden face is the plane x = faceX.
+void castleWallEnd(Vertices& v, float faceX);
 }

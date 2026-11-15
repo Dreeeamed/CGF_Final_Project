@@ -175,6 +175,12 @@ bool Garden::build() {
     for (float lx : {-50.0f, -40.0f, 10.0f, 35.0f, 48.0f})
         lantern(v, T(lx, 0, lanternZ));
 
+    // Zone A: the entrance. The castle wall closes the garden on the left, with the
+    // doorway the knight came through; two gothic pillars frame the start of the path.
+    castleWallEnd(v, layout::startX);
+    for (float side : {-1.0f, 1.0f})
+        gothicPillar(v, T(layout::startX + 6.0f, 0, side * (layout::pathHalfWidth + 1.0f)), 4.5f);
+
     // The back wall of the garden: a tall hedge across the whole strip.
     kit.hedge(green, {layout::startX, layout::backHedgeZ}, {layout::endX, layout::backHedgeZ}, 2.6f, 1.4f);
 
