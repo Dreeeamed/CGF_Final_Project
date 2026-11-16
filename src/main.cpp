@@ -341,6 +341,9 @@ int main(int argc, char* argv[]) {
     float gardenCameraX = 0.0f;
     float gardenDistance = 22.0f;
     float gardenLook = 2.5f;
+    // The knight in the garden walks along X on the path, like in the hall.
+    float gardenKnightX = 0.0f;
+    bool wasGardenScene = false;  // to notice the moment the knight enters the garden
 
     // The light: yaw turns it around the hall, pitch raises it (radians).
     float lightYaw = glm::radians(60.0f);
@@ -509,10 +512,13 @@ int main(int argc, char* argv[]) {
             // Lesson 16: up to 66 m, to look at the ribs (the vault is 70 m high above z = 18).
             freePos = glm::clamp(freePos, glm::vec3(-106, 1, -18), glm::vec3(106, 66, 18));
         } else if (gardenScene) {
-            // Garden: A/D move the camera along the garden path.
-            const float speed = pressed(GLFW_KEY_LEFT_SHIFT) ? 18.0f : 8.0f;
-            gardenCameraX = std::clamp(gardenCameraX + direction * speed * dt,
-                                       royal_garden::layout::startX + 5.0f, royal_garden::layout::endX - 5.0f);
+            // Garden: A/D walk the knight along the path; the camera follows him the same
+            // way as in the hall (every frame it closes part of the gap).
+            namespace gl = royal_garden::layout;
+            const float speed = pressed(GLFW_KEY_LEFT_SHIFT) ? 18.0f : 7.0f;
+            gardenKnightX = std::clamp(gardenKnightX + direction * speed * dt, gl::startX + 1.5f, gl::endX - 1.5f);
+            const float targetX = std::clamp(gardenKnightX, gl::startX + 5.0f, gl::endX - 5.0f);
+            gardenCameraX += (targetX - gardenCameraX) * (1.0f - std::exp(-5.0f * dt));
         } else if (insideHall) {
             float speed = pressed(GLFW_KEY_LEFT_SHIFT) ? 18.0f : 7.0f;
             if (gardenWalk > 0.0f) speed = 0.0f;   // walking through the gate: A/D do nothing
@@ -541,6 +547,7 @@ int main(int argc, char* argv[]) {
             insideHall = true; showForeground = false; freeCamera = false;
             hasKey = false; gateLift = 0.0f; inGarden = false; gardenWalk = 0.0f;
             gardenShortcut = false; gardenCameraX = 0; gardenDistance = 22; gardenLook = 2.5f;
+            gardenKnightX = -3.0f;   // on the path, just left of the fountain's side path
             cameraX = 0; knightX = -6; distance = 84; lookHeight = 24;
             if (capture) {
                 if (renderedFrames == 1) { distance = 154; lookHeight = 26; }
@@ -563,12 +570,15 @@ int main(int argc, char* argv[]) {
                 }
                 if (renderedFrames == 9) {   // the flower garden, a little closer
                     gardenCameraX = royal_garden::layout::flowerBranchX; gardenDistance = 16.0f;
+                    gardenKnightX = gardenCameraX - 3.0f;
                 }
                 if (renderedFrames == 10) {   // the resting area with its benches
                     gardenCameraX = royal_garden::layout::benchBranchX; gardenDistance = 13.0f;
+                    gardenKnightX = gardenCameraX - 3.0f;
                 }
-                if (renderedFrames == 11) {   // the entrance: castle wall, doorway, pillars
+                if (renderedFrames == 11) {   // the entrance: the knight steps out of the doorway
                     gardenCameraX = royal_garden::layout::startX + 5.0f; gardenDistance = 18.0f;
+                    gardenKnightX = royal_garden::layout::startX + 2.5f;
                 }
             } else {
                 if (renderedFrames == 1) showForeground = true;
@@ -606,6 +616,13 @@ int main(int argc, char* argv[]) {
         }
         // The walk may have just finished, or E just sent the knight back.
         gardenScene = gardenShortcut || (insideHall && inGarden && gardenWalk >= 1.0f);
+        if (gardenScene && !wasGardenScene && !smokeTest) {
+            // The knight has just come through the gate: he steps out of the castle
+            // doorway at the left end of the garden, and the camera starts there too.
+            gardenKnightX = royal_garden::layout::startX + 2.5f;
+            gardenCameraX = royal_garden::layout::startX + 5.0f;
+        }
+        wasGardenScene = gardenScene;
         if (gardenScene && !paused && !smokeTest) garden.update(dt);   // fountain water
 
         // ---- 6. Draw the scene ---------------------------------------------
@@ -656,7 +673,20 @@ int main(int argc, char* argv[]) {
         glActiveTexture(GL_TEXTURE0);
 
         if (gardenScene) {
-            garden.draw(view, projection, height);
+            garden.draw();
+            // The knight is the team's model, with the team's materials: draw him with the
+            // hall shader, so he looks the same in every scene. That shader's matrices and
+            // camera are set again here for the garden camera.
+            glUseProgram(hallProgram);
+            setMatrix(hallProgram, "view", view);
+            setMatrix(hallProgram, "projection", projection);
+            glUniform3fv(glGetUniformLocation(hallProgram, "cameraPos"), 1, glm::value_ptr(cameraPos));
+            glUniform3fv(glGetUniformLocation(hallProgram, "lightDir"), 1, glm::value_ptr(lightDir));
+            glUniform1f(glGetUniformLocation(hallProgram, "time"), clock);
+            setMatrix(hallProgram, "model", glm::translate(glm::mat4(1),
+                      glm::vec3(gardenKnightX, royal_garden::layout::pathTop, royal_garden::layout::walkZ)));
+            hall.knight.draw();
+            garden.drawEffects(view, projection, height);   // see-through water last
         } else if (insideHall) {
             hall.architecture.draw();
             if (showForeground || freeCamera) {

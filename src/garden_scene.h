@@ -81,7 +81,9 @@ struct Garden {
     FountainSpray spray;  // the fountain's falling water (particles)
     bool build();         // false if a garden shader could not be loaded
     void update(float dt);   // animation: called every frame while the garden is shown
-    void draw(const glm::mat4& view, const glm::mat4& projection, int viewportHeight) const;
+    void draw() const;       // solid meshes, with the garden shader main.cpp has chosen
+    // See-through effects, drawn after everything solid (the knight included).
+    void drawEffects(const glm::mat4& view, const glm::mat4& projection, int viewportHeight) const;
     void destroy();
 };
 }

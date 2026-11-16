@@ -209,8 +209,6 @@ bool Garden::build() {
                       * glm::scale(glm::mat4(1), glm::vec3(size)), 900u + unsigned(k));
     }
 
-    // Scale post: exactly as tall as the knight (1.5 m), standing on the walking line.
-    box(v, {-0.2f, 0, layout::walkZ - 0.2f}, {0.2f, 1.5f, layout::walkZ + 0.2f}, Gold);
 
     ground.upload(v);
     plants.upload(green);
@@ -219,12 +217,15 @@ bool Garden::build() {
 void Garden::update(float dt) {
     spray.update(dt);
 }
-// main.cpp has already chosen the garden shader and set its matrices for the solid
-// meshes. The spray then switches to its own particle shader.
-void Garden::draw(const glm::mat4& view, const glm::mat4& projection, int viewportHeight) const {
+// main.cpp has already chosen the garden shader and set its matrices.
+void Garden::draw() const {
     ground.draw();
     plants.draw();
-    spray.draw(view, projection, viewportHeight);   // last: see-through things after solid ones
+}
+// The spray switches to its own particle shader. See-through things come last, so
+// everything solid is already in the depth buffer and can hide the drops behind it.
+void Garden::drawEffects(const glm::mat4& view, const glm::mat4& projection, int viewportHeight) const {
+    spray.draw(view, projection, viewportHeight);
 }
 void Garden::destroy() {
     ground.destroy();
