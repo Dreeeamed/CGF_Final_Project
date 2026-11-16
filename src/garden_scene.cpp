@@ -225,7 +225,14 @@ bool Garden::build() {
 
     ground.upload(v);
     plants.upload(green);
-    return spray.init();
+    // Magic dust: the team's hall dust, with a garden-sized cloud in violet. The motes
+    // start between the front bushes and the back hedge, low over the flowers.
+    Dust::Cloud cloud;
+    cloud.lo = {layout::startX, 1.0f, layout::backZ + 6.0f};
+    cloud.hi = {layout::endX, 7.0f, layout::frontZ - 2.0f};
+    cloud.count = 600;
+    cloud.colour = {0.50f, 0.28f, 1.00f};   // violet, like the crystal's light
+    return spray.init() && magicDust.init(cloud);
 }
 void Garden::update(float dt) {
     spray.update(dt);
@@ -244,12 +251,22 @@ void Garden::draw() const {
 }
 // The spray switches to its own particle shader. See-through things come last, so
 // everything solid is already in the depth buffer and can hide the drops behind it.
-void Garden::drawEffects(const glm::mat4& view, const glm::mat4& projection, int viewportHeight) const {
+void Garden::drawEffects(const glm::mat4& view, const glm::mat4& projection, float time,
+                         int viewportHeight) const {
     spray.draw(view, projection, viewportHeight);
+    // The dust ADDS light (GL_ONE, GL_ONE), exactly as in the hall: it can only brighten.
+    // Solid things still hide it (depth test on), but it hides nothing (depth writes off).
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_ONE, GL_ONE);
+    glDepthMask(GL_FALSE);
+    magicDust.draw(view, projection, time, viewportHeight);
+    glDepthMask(GL_TRUE);
+    glDisable(GL_BLEND);
 }
 void Garden::destroy() {
     ground.destroy();
     plants.destroy();
     spray.destroy();
+    magicDust.destroy();
 }
 }

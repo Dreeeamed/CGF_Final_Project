@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include "garden_particles.h"
+#include "dust.h"
 
 // The Forgotten Royal Garden: a separate scene, independent of the hall and facade.
 namespace royal_garden {
@@ -85,6 +86,7 @@ struct Garden {
     Mesh ground;          // ground, paths, curbs, plaza, pavings and the fountain
     Mesh plants;          // trees, flowers, bushes and hedges
     FountainSpray spray;  // the fountain's falling water (particles)
+    Dust magicDust;       // violet motes floating over the garden (the team's Dust class)
     // Point lights, collected by build() while it places the models.
     std::vector<glm::vec3> lanternLights;   // centre of every lantern's flame
     glm::vec3 crystalLight{0.0f};           // centre of the fountain's crystal
@@ -93,7 +95,7 @@ struct Garden {
     void setLights(GLuint program) const;   // gives the lights to a shader (in use)
     void draw() const;       // solid meshes, with the garden shader main.cpp has chosen
     // See-through effects, drawn after everything solid (the knight included).
-    void drawEffects(const glm::mat4& view, const glm::mat4& projection, int viewportHeight) const;
+    void drawEffects(const glm::mat4& view, const glm::mat4& projection, float time, int viewportHeight) const;
     void destroy();
 };
 }

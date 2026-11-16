@@ -693,7 +693,7 @@ int main(int argc, char* argv[]) {
             hall.knight.draw();
             // A uniform keeps its value: switch back, so the hall has its chandeliers again.
             glUniform1i(glGetUniformLocation(hallProgram, "gardenLights"), 0);
-            garden.drawEffects(view, projection, height);   // see-through water last
+            garden.drawEffects(view, projection, clock, height);   // see-through water and dust last
         } else if (insideHall) {
             hall.architecture.draw();
             if (showForeground || freeCamera) {
