@@ -75,12 +75,22 @@ struct Mesh {
     void destroy();
 };
 
+// The moon: the garden's one direction light (towards the moon). garden.frag uses the
+// same vector; main.cpp gives it to the hall shader for the knight.
+inline const glm::vec3 moonDirection(-0.4f, 0.8f, 0.45f);
+// Size of the lantern array in the shaders (garden.frag and hall.frag).
+constexpr int maxLanternLights = 16;
+
 struct Garden {
     Mesh ground;          // ground, paths, curbs, plaza, pavings and the fountain
     Mesh plants;          // trees, flowers, bushes and hedges
     FountainSpray spray;  // the fountain's falling water (particles)
+    // Point lights, collected by build() while it places the models.
+    std::vector<glm::vec3> lanternLights;   // centre of every lantern's flame
+    glm::vec3 crystalLight{0.0f};           // centre of the fountain's crystal
     bool build();         // false if a garden shader could not be loaded
     void update(float dt);   // animation: called every frame while the garden is shown
+    void setLights(GLuint program) const;   // gives the lights to a shader (in use)
     void draw() const;       // solid meshes, with the garden shader main.cpp has chosen
     // See-through effects, drawn after everything solid (the knight included).
     void drawEffects(const glm::mat4& view, const glm::mat4& projection, int viewportHeight) const;

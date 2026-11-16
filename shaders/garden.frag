@@ -36,6 +36,13 @@ const float castleTile = 4.0;
 // The fountain's centre in the world: (layout::fountainX, layout::plazaZ).
 const vec2 fountainCentre = vec2(0.0, -12.0);
 
+// Point lights, sent by Garden::setLights (src/garden_scene.cpp) from the real
+// positions of the models, so a lamp's light always comes from its flame.
+uniform int lanternCount;
+uniform vec3 lanternLights[16];   // flame centres (16 = maxLanternLights in garden_scene.h)
+uniform vec3 crystalLight;        // centre of the fountain's crystal
+const vec3 moonDir = normalize(vec3(-0.4, 0.8, 0.45));   // = moonDirection in garden_scene.h
+
 // Garden palette (hex design targets / 255).
 const vec3 mossColour  = vec3(0.188, 0.302, 0.325);  // #304D53 desaturated teal
 const vec3 stoneColour = vec3(0.145, 0.180, 0.259);  // #252E42 dark blue-grey
@@ -52,6 +59,8 @@ const vec3 marbleColour = vec3(0.330, 0.370, 0.470); // pale blue-grey: the foun
 const vec3 waterColour = vec3(0.392, 0.608, 0.682);  // #649BAE muted cyan
 const vec3 ironColour  = vec3(0.060, 0.065, 0.085);  // blackened iron
 const vec3 flameColour = vec3(1.000, 0.700, 0.330);  // warm lantern light, near #C5A16B
+const vec3 candleLight = vec3(1.000, 0.620, 0.300);  // light of a flame: the hall chandeliers' colour
+const vec3 magicLight  = vec3(0.620, 0.260, 1.000);  // violet magic light: the hall braziers' colour
 const vec3 fogColour   = vec3(0.043, 0.063, 0.125);  // #0B1020 midnight navy
 
 // ---------------------------------------------------------------------------
@@ -142,11 +151,39 @@ void main() {
     if (Material == IRON) base = ironColour;
     if (Material == LANTERN_GLOW) base = flameColour;
 
-    // Temporary lighting until Phase 7: low cool ambient + one moonlight direction
-    // (Lambert diffuse, L-5-2 Shading). Enough to tell the faces of a box apart.
-    vec3 moonDir = normalize(vec3(-0.4, 0.8, 0.45));
+    // How shiny each material is (Blinn-Phong: strength and exponent, L-5-2 Shading).
+    // Polished gold and wet water give small sharp highlights; moss and leaves none.
+    float specularStrength = 0.0, shininess = 32.0;
+    if (Material == GOLD) { specularStrength = 0.7; shininess = 48.0; }
+    if (Material == MARBLE || Material == CASTLE_STONE) { specularStrength = 0.12; shininess = 20.0; }
+    if (Material == IRON) { specularStrength = 0.3; shininess = 30.0; }
+    if (Material == WATER) { specularStrength = 0.9; shininess = 80.0; }
+
+    // ---- Light --------------------------------------------------------------
+    // 1. Moonlight: a cool ambient term + one direction light (Lambert diffuse).
+    //    Darker than before, so the lanterns' pools of light can be seen.
+    vec3 viewDir = normalize(cameraPos - FragPos);
     float diffuse = max(dot(n, moonDir), 0.0);
-    vec3 colour = base * (vec3(0.30, 0.34, 0.45) + vec3(0.70, 0.75, 0.90) * diffuse);
+    vec3 colour = base * (vec3(0.22, 0.26, 0.36) + vec3(0.60, 0.66, 0.82) * diffuse);
+
+    // 2. The lanterns: warm POINT lights (L-5-2 p24, distance terms). Unlike the moon,
+    //    a point light has a position: the direction L changes from pixel to pixel, and
+    //    the light gets weaker with distance d as 1 / (1 + k d^2). The same model as the
+    //    hall's chandeliers, with a bigger k: a small lantern lights only a few metres.
+    for (int i = 0; i < lanternCount; i++) {
+        vec3 toLamp = lanternLights[i] - FragPos;
+        float fade = 2.4 / (1.0 + dot(toLamp, toLamp) * 0.22);
+        vec3 L = normalize(toLamp);
+        float lambert = max(dot(n, L), 0.0);
+        float shine = pow(max(dot(n, normalize(L + viewDir)), 0.0), shininess);   // Blinn-Phong
+        colour += candleLight * fade * (base * lambert + shine * specularStrength);
+    }
+    // 3. The crystal: one violet point light, stronger and reaching farther (small k),
+    //    so the whole plaza and the water round the fountain turn a little magical.
+    vec3 toCrystal = crystalLight - FragPos;
+    float glow = 2.0 / (1.0 + dot(toCrystal, toCrystal) * 0.02);
+    colour += magicLight * glow * base * max(dot(n, normalize(toCrystal)), 0.0);
+
     if (Material == WATER) {
         // Ripples: rings round the fountain's centre that move outwards with time.
         // sin(distance * k - time * speed) is a wave travelling away from the centre.
@@ -155,9 +192,8 @@ void main() {
         colour += waterColour * 0.12 * ripple;
         // A mirror-like sparkle of the moon (Blinn-Phong specular, L-5-2 Shading):
         // strongest where the halfway vector between moon and eye meets the normal.
-        vec3 viewDir = normalize(cameraPos - FragPos);
         vec3 halfway = normalize(moonDir + viewDir);
-        colour += vec3(0.75, 0.85, 1.0) * pow(max(dot(n, halfway), 0.0), 80.0) * 0.8;
+        colour += vec3(0.75, 0.85, 1.0) * pow(max(dot(n, halfway), 0.0), shininess) * 0.8;
     }
     // The crystal glows: strong emission, so the team's bloom makes a soft halo.
     if (Material == CRYSTAL) colour += violetColour * 1.6;

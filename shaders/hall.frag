@@ -21,6 +21,12 @@ uniform vec2 pomLayers;           // x: layers when looking straight at the wall
 uniform int shadowSteps;          // steps of the walk towards the light
 uniform bool showBackFaces;       // B: culling is off, paint back sides red
 uniform float gateLift;           // 0 = gate closed, 1 = fully raised
+// The knight in the garden: the garden's lanterns and crystal light him instead of the
+// hall's chandeliers (set by main.cpp with Garden::setLights, same model as garden.frag).
+uniform bool gardenLights;
+uniform int lanternCount;
+uniform vec3 lanternLights[16];
+uniform vec3 crystalLight;
 
 // Material numbers, the same order as `enum Material` in hall_geometry.h.
 const int STONE = 0, FLOOR = 1, DARKNESS = 2, BANNER = 3, CARPET = 4, BRASS = 5,
@@ -411,6 +417,20 @@ void shade() {
     float spec = pow(max(dot(n, normalize(keyDir + viewDir)), 0.0), shininess) * wallShadow;   // Blinn-Phong
     colour += specularColour * spec * specularStrength;
 
+    if (gardenLights) {
+        // The garden: its lanterns (warm) and the fountain's crystal (violet).
+        for (int i = 0; i < lanternCount; i++) {
+            vec3 toLamp = lanternLights[i] - FragPos;
+            float fade = 2.4 / (1.0 + dot(toLamp, toLamp) * 0.22);
+            vec3 L = normalize(toLamp);
+            float lambert = max(dot(n, L), 0.0);
+            float shine = pow(max(dot(n, normalize(L + viewDir)), 0.0), shininess);
+            colour += vec3(1.0, 0.62, 0.30) * fade * (base * (0.08 + lambert) + shine * specularStrength);
+        }
+        vec3 toCrystal = crystalLight - FragPos;
+        float glow = 2.0 / (1.0 + dot(toCrystal, toCrystal) * 0.02);
+        colour += vec3(0.62, 0.26, 1.0) * glow * base * (0.1 + max(dot(n, normalize(toCrystal)), 0.0));
+    } else {
     // Lesson 18: five crystal chandeliers = five warm point lights, at the same x as in
     // Hall::build (-64, -32, 0, 32, 64), 35 m high. Each one: Lambert + Blinn-Phong,
     // weaker with distance (1 / (1 + k d^2)). Cold moonlight + warm candles = dark fantasy.
@@ -430,6 +450,7 @@ void shade() {
         float lambert = max(dot(n, normalize(toFire)), 0.0);
         colour += vec3(0.62, 0.26, 1.0) * fade * base * (0.1 + lambert);
     }
+    }   // end of the hall's lights (left unindented: the team's lines stay unchanged)
     colour += emission;   // lesson 19: glowing lines are not lit, they shine
 
     // Fog depends mostly on depth into the hall; zooming out won't erase the scene.

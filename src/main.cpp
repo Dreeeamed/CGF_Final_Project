@@ -673,6 +673,7 @@ int main(int argc, char* argv[]) {
         glActiveTexture(GL_TEXTURE0);
 
         if (gardenScene) {
+            garden.setLights(gardenProgram);
             garden.draw();
             // The knight is the team's model, with the team's materials: draw him with the
             // hall shader, so he looks the same in every scene. That shader's matrices and
@@ -681,11 +682,17 @@ int main(int argc, char* argv[]) {
             setMatrix(hallProgram, "view", view);
             setMatrix(hallProgram, "projection", projection);
             glUniform3fv(glGetUniformLocation(hallProgram, "cameraPos"), 1, glm::value_ptr(cameraPos));
-            glUniform3fv(glGetUniformLocation(hallProgram, "lightDir"), 1, glm::value_ptr(lightDir));
+            // In the garden the knight is lit like the garden: by its moon, lanterns and crystal.
+            glUniform3fv(glGetUniformLocation(hallProgram, "lightDir"), 1,
+                         glm::value_ptr(royal_garden::moonDirection));
             glUniform1f(glGetUniformLocation(hallProgram, "time"), clock);
+            glUniform1i(glGetUniformLocation(hallProgram, "gardenLights"), 1);
+            garden.setLights(hallProgram);
             setMatrix(hallProgram, "model", glm::translate(glm::mat4(1),
                       glm::vec3(gardenKnightX, royal_garden::layout::pathTop, royal_garden::layout::walkZ)));
             hall.knight.draw();
+            // A uniform keeps its value: switch back, so the hall has its chandeliers again.
+            glUniform1i(glGetUniformLocation(hallProgram, "gardenLights"), 0);
             garden.drawEffects(view, projection, height);   // see-through water last
         } else if (insideHall) {
             hall.architecture.draw();

@@ -89,6 +89,6 @@ void fountain(Vertices& v, const glm::mat4& instance) {
     cylinder(part, 0.7f, 0.3f, 0.01f, 8, Marble);
     add(spire * T(0, 1.4f, 0));
     sphere(part, 1.0f, 6, 8, Crystal);
-    add(spire * T(0, 2.35f, 0) * S(0.2f, 0.42f, 0.2f));
+    add(spire * T(0, f::crystalHeight, 0) * S(0.2f, 0.42f, 0.2f));
 }
 }

@@ -10,6 +10,8 @@ void bench(Vertices& v, const glm::mat4& instance);
 
 // A gothic lantern on an iron post, about 2.7 m tall, standing on y = 0.
 void lantern(Vertices& v, const glm::mat4& instance);
+// Height of the centre of its glowing core: where its point light sits (garden.frag).
+constexpr float lanternFlameY = 2.5f;
 
 // A tall gothic pillar with gold bands and a pointed pinnacle, standing on y = 0.
 void gothicPillar(Vertices& v, const glm::mat4& instance, float height);

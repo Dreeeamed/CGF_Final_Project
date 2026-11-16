@@ -4,6 +4,8 @@
 #include "garden_plants.h"
 #include "garden_primitives.h"
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 
@@ -129,6 +131,11 @@ bool Garden::build() {
           layout::plazaTop, 8, PathStone);
     // The fountain itself: one instance transformation puts it on the plaza centre.
     fountain(v, T(layout::fountainX, layout::plazaTop, layout::plazaZ));
+    // Its crystal is a violet point light. Same chain of frames as in fountain().
+    namespace f = fountain_size;
+    crystalLight = {layout::fountainX,
+                    layout::plazaTop + f::basinBaseY + f::pedestal + f::bowlRimTop + f::crystalHeight,
+                    layout::plazaZ};
 
     // Zone C: the flower path, its round rondel, two mirrored flowerbeds,
     // and a ring of flowers round the rondel (the front, where the path arrives, stays open).
@@ -162,18 +169,24 @@ bool Garden::build() {
     bench(v, T(bxE, seatY, layout::benchAreaBackZ + 0.7f));
     bench(v, T(bxE - bh + 0.7f, seatY, -10.8f) * RotY(90.0f));
     bench(v, T(bxE + bh - 0.7f, seatY, -10.8f) * RotY(-90.0f));
+    // Every lantern is also a warm point light: remember where its flame is.
+    lanternLights.clear();
+    auto addLantern = [&](glm::vec3 foot) {
+        lantern(v, T(foot.x, foot.y, foot.z));
+        lanternLights.push_back(foot + glm::vec3(0, lanternFlameY, 0));
+    };
     // Two lanterns at the front corners of the resting area.
-    lantern(v, T(bxE - bh + 0.4f, seatY, layout::benchBranchEnd - 0.2f));
-    lantern(v, T(bxE + bh - 0.4f, seatY, layout::benchBranchEnd - 0.2f));
+    addLantern({bxE - bh + 0.4f, seatY, layout::benchBranchEnd - 0.2f});
+    addLantern({bxE + bh - 0.4f, seatY, layout::benchBranchEnd - 0.2f});
 
     // Lanterns along the back edge of the main path: a pair guarding every side path
     // (like a gateway), and single ones keeping a rhythm on the long stretches.
     const float lanternZ = -(layout::pathHalfWidth + 0.6f);
     for (float bx : layout::branchX)
         for (float side : {-1.0f, 1.0f})
-            lantern(v, T(bx + side * (layout::branchHalfWidth + 1.1f), 0, lanternZ));
+            addLantern({bx + side * (layout::branchHalfWidth + 1.1f), 0, lanternZ});
     for (float lx : {-50.0f, -40.0f, 10.0f, 35.0f, 48.0f})
-        lantern(v, T(lx, 0, lanternZ));
+        addLantern({lx, 0, lanternZ});
 
     // Zone A: the entrance. The castle wall closes the garden on the left, with the
     // doorway the knight came through; two gothic pillars frame the start of the path.
@@ -216,6 +229,13 @@ bool Garden::build() {
 }
 void Garden::update(float dt) {
     spray.update(dt);
+}
+// Uniform arrays: one call sends `count` vec3s, starting at element 0.
+void Garden::setLights(GLuint program) const {
+    const int count = std::min(int(lanternLights.size()), maxLanternLights);
+    glUniform1i(glGetUniformLocation(program, "lanternCount"), count);
+    glUniform3fv(glGetUniformLocation(program, "lanternLights"), count, glm::value_ptr(lanternLights[0]));
+    glUniform3fv(glGetUniformLocation(program, "crystalLight"), 1, glm::value_ptr(crystalLight));
 }
 // main.cpp has already chosen the garden shader and set its matrices.
 void Garden::draw() const {
