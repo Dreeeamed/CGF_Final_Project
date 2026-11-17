@@ -109,7 +109,13 @@ bool Garden::build() {
     const PlantKit kit;  // builds every plant prototype once
 
     // Ground: one metre thick, its top surface at Y = 0 (same floor height as the hall).
-    box(v, {layout::startX, -1, layout::backZ}, {layout::endX, 0, layout::frontZ}, Moss);
+    // It reaches far past the garden strip (towards the camera and to the right), so the
+    // camera never sees where the world ends.
+    box(v, {layout::startX - 3.0f, -1, layout::backZ - 2.0f}, {layout::endX + 90.0f, 0, 90.0f}, Moss);
+    // The painted night sky behind everything: one tall sheet facing the camera.
+    // garden.frag draws stars, the moon and the castle's towers on it.
+    const float skyZ = layout::backZ - 1.5f;
+    quad(v, {-260.0f, -1.0f, skyZ}, {260.0f, -1.0f, skyZ}, {260.0f, 120.0f, skyZ}, {-260.0f, 120.0f, skyZ}, Sky);
 
     // Main path: the whole garden length, centred on the walking line.
     const float pw = layout::pathHalfWidth;
@@ -195,7 +201,7 @@ bool Garden::build() {
         gothicPillar(v, T(layout::startX + 6.0f, 0, side * (layout::pathHalfWidth + 1.0f)), 4.5f);
 
     // The back wall of the garden: a tall hedge across the whole strip.
-    kit.hedge(green, {layout::startX, layout::backHedgeZ}, {layout::endX, layout::backHedgeZ}, 2.6f, 1.4f);
+    kit.hedge(green, {layout::startX, layout::backHedgeZ}, {layout::endX + 90.0f, layout::backHedgeZ}, 2.6f, 1.4f);
 
     // Zone D: ancient trees. ONE tree model, placed six times with different
     // instance transformations (position, turn, size).

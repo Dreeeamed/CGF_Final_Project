@@ -26,8 +26,11 @@ const int CRYSTAL = 15;
 const int IRON = 16;
 const int LANTERN_GLOW = 17;
 const int CASTLE_STONE = 18;
+const int SKY = 19;
 
 uniform float time;   // seconds; set by main.cpp (0 in the smoke test)
+uniform bool parallaxOn;   // P: the paving's parallax occlusion mapping on / off (main.cpp sends it)
+uniform float ending;      // 0..1: the story's end, the crystal wakes up (0 until main.cpp sends it)
 // The castle's own stone maps, shared with the hall (main.cpp binds them for every scene).
 uniform sampler2D stoneTexture;   // texture unit 0: colour of the stone (albedo.png)
 uniform sampler2D normalMap;      // texture unit 2: tilt of the stone surface (normal.png)
@@ -100,8 +103,134 @@ float stoneDetail(vec3 p, vec3 n) {
     return mix(0.86, dot(c, vec3(0.2126, 0.7152, 0.0722)), 0.32);   // luminance
 }
 
+// ---------------------------------------------------------------------------
+// Small tools
+// ---------------------------------------------------------------------------
+float hash21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+
+// Smooth random values: a random number at every whole-number corner, blended in between.
+float noise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash21(i), hash21(i + vec2(1, 0)), f.x),
+               mix(hash21(i + vec2(0, 1)), hash21(i + vec2(1, 1)), f.x), f.y);
+}
+
+// ---------------------------------------------------------------------------
+// Parallax occlusion mapping on the paving (the project's topic, now on a FLOOR)
+// ---------------------------------------------------------------------------
+// The hall reads its relief from a picture (height.png). Here the relief is a formula:
+// stone slabs of 1.5 m x 1.0 m with joints between them, every slab at its own height.
+// A floor makes the tangent space easy: T = +X, B = +Z, N = +Y.
+
+const float pavingDepth = 0.09;   // metres from the top of the highest slab to the bottom of a joint
+
+// 1 = top of a slab, 0 = bottom of a joint. `slab` returns the slab's own random number.
+float pavingHeight(vec2 xz, out float slab) {
+    vec2 q = xz / vec2(1.5, 1.0);
+    q.x += 0.5 * floor(q.y);                    // every second row is shifted ("running bond")
+    slab = hash21(floor(q));
+    vec2 f = fract(q);
+    float edge = min(min(f.x, 1.0 - f.x) * 1.5, min(f.y, 1.0 - f.y));   // metres to the nearest joint
+    return smoothstep(0.0, 0.07, edge) * (0.7 + 0.3 * slab);
+}
+float pavingHeight(vec2 xz) {
+    float slab;
+    return pavingHeight(xz, slab);
+}
+
+// March the view ray down into the relief, layer by layer, and return where it hits
+// (the same steps as parallaxUV in hall.frag). V points from the surface to the eye.
+vec2 pavingParallax(vec2 xz, vec3 V, out float hitDepth) {
+    float layers = mix(40.0, 12.0, clamp(V.y, 0.0, 1.0));   // more layers at grazing angles
+    float layerDepth = 1.0 / layers;
+    vec2 delta = -V.xz / max(V.y, 0.12) * pavingDepth * layerDepth;   // one layer deeper = this far along
+    float rayDepth = 0.0;
+    float surfaceDepth = 1.0 - pavingHeight(xz);
+    for (int i = 0; i < 48 && rayDepth < surfaceDepth; i++) {
+        xz += delta;
+        rayDepth += layerDepth;
+        surfaceDepth = 1.0 - pavingHeight(xz);
+    }
+    // The hit lies between the last two layers: blend by how far each one missed.
+    vec2 previous = xz - delta;
+    float after = surfaceDepth - rayDepth;
+    float before = (1.0 - pavingHeight(previous)) - (rayDepth - layerDepth);
+    float weight = after / (after - before);
+    hitDepth = mix(rayDepth, rayDepth - layerDepth, weight);
+    return mix(xz, previous, weight);
+}
+
+// Self-shadowing: walk from the hit point towards the moon; if a slab edge is above the
+// ray, the point is in shadow (like parallaxShadow in hall.frag).
+float pavingShadow(vec2 xz, float hitDepth, vec3 L) {
+    const int steps = 12;
+    float layerDepth = hitDepth / float(steps);
+    vec2 delta = L.xz / max(L.y, 0.2) * pavingDepth * layerDepth;
+    float blocked = 0.0;
+    for (int i = 1; i <= steps; i++) {
+        xz += delta;
+        float rayDepth = hitDepth - layerDepth * float(i);
+        float stoneAbove = rayDepth - (1.0 - pavingHeight(xz));
+        blocked = max(blocked, stoneAbove * (1.0 - float(i) / float(steps)));
+    }
+    return 1.0 - clamp(blocked * 10.0, 0.0, 1.0);
+}
+
+// ---------------------------------------------------------------------------
+// The painted sky behind the back hedge
+// ---------------------------------------------------------------------------
+// One big flat sheet, but its picture has three layers that slide by different amounts
+// when the camera moves: stars and moon (almost not at all), far towers, near towers.
+// Far things move less than near things - parallax again, here with one quad.
+vec3 skyBackdrop(vec3 p) {
+    vec2 farPos = vec2(p.x - cameraPos.x * 0.92, p.y);   // stars and moon: nearly at infinity
+    vec3 colour = mix(vec3(0.060, 0.090, 0.190), vec3(0.010, 0.014, 0.040), clamp(p.y / 45.0, 0.0, 1.0));
+    // Stars: one per cell of a grid, most cells empty; they twinkle slowly.
+    vec2 cell = floor(farPos * 1.1), inCell = fract(farPos * 1.1) - 0.5;
+    float r = hash21(cell);
+    float star = step(0.955, r) * (1.0 - smoothstep(0.02, 0.16, length(inCell)));
+    colour += vec3(0.75, 0.82, 1.0) * star * (0.6 + 0.4 * sin(time * (1.0 + r * 3.0) + r * 40.0));
+    // The moon and its halo.
+    float md = length(farPos - vec2(17.0, 15.5));
+    colour += vec3(0.90, 0.93, 1.0) * (1.0 - smoothstep(2.3, 2.5, md)) * 1.25;
+    colour += vec3(0.30, 0.38, 0.60) * exp(-md * 0.30) * 0.45;
+
+    // The castle round the garden: two rows of towers with lit windows.
+    for (int layer = 0; layer < 2; layer++) {
+        float slide = layer == 0 ? 0.62 : 0.35;                 // the far row slides more with the camera
+        float spacing = layer == 0 ? 31.0 : 23.0;
+        float x = p.x - cameraPos.x * slide + float(layer) * 9.0;
+        float id = floor(x / spacing + 0.5);
+        float tx = x - id * spacing;                            // metres from the tower's centre line
+        float halfW = 2.6 + 1.4 * hash21(vec2(id, float(layer)));
+        float top = (layer == 0 ? 9.5 : 7.5) + 4.5 * hash21(vec2(id, 7.0 + float(layer)));
+        float wall = (layer == 0 ? 8.5 : 6.0) + 0.9 * step(fract(x / 2.2), 0.5);   // battlements
+        float roof = top + max(halfW + 0.6 - abs(tx), 0.0) * 2.3;                   // pointed roof
+        float skyline = abs(tx) < halfW + 0.6 ? max(roof, wall) : wall;
+        if (p.y < skyline) {
+            vec3 stone = layer == 0 ? vec3(0.030, 0.040, 0.078) : vec3(0.016, 0.022, 0.045);
+            // Windows: a grid on the tower; a random part of them is lit.
+            vec2 w = vec2(tx / 1.3, p.y / 2.4);
+            vec2 wc = floor(w), wf = fract(w) - 0.5;
+            float lit = step(0.62, hash21(wc + vec2(id * 13.0, float(layer) * 5.0)));
+            float inside = step(abs(tx), halfW - 0.5) * step(4.0, p.y) * step(p.y, top - 1.0);
+            float window = lit * inside * step(abs(wf.x), 0.16) * step(abs(wf.y), 0.27);
+            colour = mix(stone, flameColour * (layer == 0 ? 0.8 : 1.25), window);
+        }
+    }
+    return colour;
+}
+
 void main() {
+    if (Material == SKY) {   // the sky sheet is a painting: no light, no fog
+        FragColor = vec4(pow(skyBackdrop(FragPos), vec3(2.2)), 1.0);
+        return;
+    }
     vec3 n = normalize(Normal);
+    vec3 viewDir = normalize(cameraPos - FragPos);   // moved up here: the paving's POM needs it
+    float moonShadow = 1.0;   // 0 = in the shadow of the paving's own relief
+    float wrap = 0.0;         // leaves and petals: light also reaches round to the dark side
 
     // The castle stone's texture coordinates and their screen-space derivatives are
     // computed for EVERY pixel, before any "if": mipmapping (L-8-1 p29-33) needs to
@@ -113,6 +242,12 @@ void main() {
     float detail = stoneDetail(FragPos, n);
 
     vec3 base = mossColour;
+    if (Material == MOSS) {
+        // Patches of darker and lighter moss, and fine grain: two sizes of noise.
+        float patches = noise(FragPos.xz * 0.22), grain = noise(FragPos.xz * 3.1);
+        base = mossColour * (0.55 + 0.55 * patches) * (0.85 + 0.3 * grain);
+        base = mix(base, vec3(0.20, 0.27, 0.22), 0.35 * noise(FragPos.xz * 0.6 + 40.0));
+    }
     if (Material == CASTLE_STONE) {
         // The castle wall: the real stone photo as its colour, and its normal map to
         // tilt the normal per pixel (bump / normal mapping, L-8-1 p51-56), so every
@@ -122,14 +257,27 @@ void main() {
         n = normalize(T * bump.x + B * bump.y + n * bump.z);
     }
     if (Material == PATH_STONE) {
-        // Stone slabs measured in world metres (1.5 m x 1.0 m). Every second row
-        // is shifted by half a slab, like real paving ("running bond").
-        vec2 q = FragPos.xz / vec2(1.5, 1.0);
-        q.x += 0.5 * floor(q.y);
-        vec2 f = fract(q);                          // position inside one slab, 0..1
-        float edge = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
-        float joint = smoothstep(0.02, 0.05, edge); // 0 on the joint line, 1 inside
-        base = mix(stoneColour * 0.45, stoneColour, joint) * detail;
+        // Stone slabs measured in world metres (1.5 m x 1.0 m), "running bond".
+        vec2 p = FragPos.xz;
+        float slab, height;
+        if (n.y > 0.7) {
+            // The top face: parallax occlusion mapping. The view ray is marched into the
+            // relief, so the joints are really deep and near slabs hide far joints.
+            float hitDepth = 0.0;
+            if (parallaxOn) p = pavingParallax(p, viewDir, hitDepth);
+            height = pavingHeight(p, slab);
+            if (parallaxOn) moonShadow = pavingShadow(p, 1.0 - height, moonDir);
+            // The relief also tilts the normal: slopes of the height field along X and Z.
+            const float e = 0.012;
+            float hx = pavingHeight(p + vec2(e, 0.0)) - pavingHeight(p - vec2(e, 0.0));
+            float hz = pavingHeight(p + vec2(0.0, e)) - pavingHeight(p - vec2(0.0, e));
+            n = normalize(vec3(-hx, 2.0 * e / pavingDepth, -hz));
+        } else {
+            height = pavingHeight(p, slab);   // the sides of a path: no POM, the same pattern
+        }
+        // Dark in the joints, and every slab a little different in tone.
+        base = stoneColour * mix(0.30, 1.0, smoothstep(0.0, 0.6, height)) * (0.85 + 0.4 * slab)
+             * stoneDetail(vec3(p.x, FragPos.y, p.y), vec3(0.0, 1.0, 0.0));
     }
     if (Material == GOLD) base = goldColour;
     if (Material == CURB) base = slateColour * detail;
@@ -137,14 +285,14 @@ void main() {
         // Thin vertical grooves: brightness changes round the trunk (UV.x = angle).
         base = barkColour * (0.8 + 0.2 * sin(UV.x * 6.2832 * 7.0));
     }
-    if (Material == LEAF) base = leafColour;
-    if (Material == LEAF_VIOLET) base = violetColour * 0.6;
+    if (Material == LEAF) { base = leafColour; wrap = 0.5; }
+    if (Material == LEAF_VIOLET) { base = violetColour * 0.6; wrap = 0.5; }
     if (Material == SOIL) base = soilColour;
-    if (Material == STEM) base = leafColour * 0.6;
-    if (Material == PETAL_LAVENDER) base = lavenderColour;
-    if (Material == PETAL_WHITE) base = paleColour;
+    if (Material == STEM) { base = leafColour * 0.6; wrap = 0.5; }
+    if (Material == PETAL_LAVENDER) { base = lavenderColour; wrap = 0.6; }
+    if (Material == PETAL_WHITE) { base = paleColour; wrap = 0.6; }
     if (Material == FLOWER_HEART) base = goldColour;
-    if (Material == HEDGE) base = hedgeColour;
+    if (Material == HEDGE) { base = hedgeColour * (0.8 + 0.4 * noise(FragPos.xy * 2.5 + FragPos.z)); wrap = 0.4; }
     if (Material == MARBLE) base = marbleColour * detail;
     if (Material == WATER) base = waterColour * 0.55;
     if (Material == CRYSTAL) base = violetColour;
@@ -158,13 +306,27 @@ void main() {
     if (Material == MARBLE || Material == CASTLE_STONE) { specularStrength = 0.12; shininess = 20.0; }
     if (Material == IRON) { specularStrength = 0.3; shininess = 30.0; }
     if (Material == WATER) { specularStrength = 0.9; shininess = 80.0; }
+    if (Material == PATH_STONE) { specularStrength = 0.35; shininess = 60.0; }   // worn smooth
+
+    if (Material == WATER) {
+        // Ripples tilt the water's normal: rings round the fountain that move outwards.
+        // A tilted normal moves the highlights, so the water glitters.
+        vec2 away = FragPos.xz - fountainCentre;
+        float d = length(away);
+        float slope = cos(d * 7.0 - time * 2.5) * 0.22;
+        n = normalize(vec3(-slope * away.x / max(d, 0.01), 1.0, -slope * away.y / max(d, 0.01)));
+    }
 
     // ---- Light --------------------------------------------------------------
     // 1. Moonlight: a cool ambient term + one direction light (Lambert diffuse).
     //    Darker than before, so the lanterns' pools of light can be seen.
-    vec3 viewDir = normalize(cameraPos - FragPos);
-    float diffuse = max(dot(n, moonDir), 0.0);
+    // wrap = 0: ordinary Lambert. wrap > 0: (0.5 + 0.5 cos) lets light "wrap" round thin
+    // leaves and petals, so their dark side is not black.
+    float diffuse = mix(max(dot(n, moonDir), 0.0), 0.5 + 0.5 * dot(n, moonDir), wrap) * moonShadow;
     vec3 colour = base * (vec3(0.22, 0.26, 0.36) + vec3(0.60, 0.66, 0.82) * diffuse);
+    if (Material != WATER)   // the moon's highlight (the water has its own sparkle below)
+        colour += vec3(0.75, 0.85, 1.0) * specularStrength * moonShadow * 0.5
+                * pow(max(dot(n, normalize(moonDir + viewDir)), 0.0), shininess);
 
     // 2. The lanterns: warm POINT lights (L-5-2 p24, distance terms). Unlike the moon,
     //    a point light has a position: the direction L changes from pixel to pixel, and
@@ -174,14 +336,14 @@ void main() {
         vec3 toLamp = lanternLights[i] - FragPos;
         float fade = 2.4 / (1.0 + dot(toLamp, toLamp) * 0.22);
         vec3 L = normalize(toLamp);
-        float lambert = max(dot(n, L), 0.0);
+        float lambert = mix(max(dot(n, L), 0.0), 0.5 + 0.5 * dot(n, L), wrap);
         float shine = pow(max(dot(n, normalize(L + viewDir)), 0.0), shininess);   // Blinn-Phong
         colour += candleLight * fade * (base * lambert + shine * specularStrength);
     }
     // 3. The crystal: one violet point light, stronger and reaching farther (small k),
     //    so the whole plaza and the water round the fountain turn a little magical.
     vec3 toCrystal = crystalLight - FragPos;
-    float glow = 2.0 / (1.0 + dot(toCrystal, toCrystal) * 0.02);
+    float glow = (2.0 + 6.0 * ending) / (1.0 + dot(toCrystal, toCrystal) * 0.02);   // brighter at the end
     colour += magicLight * glow * base * max(dot(n, normalize(toCrystal)), 0.0);
 
     if (Material == WATER) {
@@ -196,7 +358,7 @@ void main() {
         colour += vec3(0.75, 0.85, 1.0) * pow(max(dot(n, halfway), 0.0), shininess) * 0.8;
     }
     // The crystal glows: strong emission, so the team's bloom makes a soft halo.
-    if (Material == CRYSTAL) colour += violetColour * 1.6;
+    if (Material == CRYSTAL) colour += violetColour * (1.6 + 4.0 * ending);
     // Lantern flames: strong warm emission with a gentle flicker. The phase depends on
     // the position, so neighbouring lanterns do not flicker in step.
     if (Material == LANTERN_GLOW)
@@ -204,13 +366,15 @@ void main() {
                                      + 0.1 * sin(time * 23.0 + FragPos.z));
     // Magical flowers give a little light of their own (emission): it is added on top
     // of the reflected light, so they stay visible even on their dark side.
-    if (Material == PETAL_LAVENDER) colour += lavenderColour * 0.35;
+    if (Material == PETAL_LAVENDER) colour += lavenderColour * (0.35 + 0.35 * ending);
 
     // Depth fog: the farther a point lies behind the walking line (-Z), the more navy.
     float fog = clamp(-FragPos.z / 40.0, 0.0, 0.6);
-    colour = mix(colour, fogColour, fog);
+    // A thin mist lies on the ground: below 2.5 m, thicker farther back.
+    fog += 0.18 * smoothstep(2.5, 0.0, FragPos.y) * clamp(-FragPos.z / 20.0, 0.0, 1.0);
+    colour = mix(colour, fogColour, min(fog, 0.75));
     // Our palette is picked by eye on the monitor ("gamma-encoded"). The team's HDR
     // pipeline adds light as energy, so decode to linear here, like hall.frag does;
     // post.frag encodes back for the monitor at the very end.
-    FragColor = vec4(pow(colour, vec3(2.2)), 1.0);
+    FragColor = vec4(pow(max(colour, 0.0), vec3(2.2)), 1.0);   // max: pow of a negative number is undefined
 }

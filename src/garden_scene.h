@@ -58,7 +58,7 @@ constexpr float backHedgeZ = -27.0f;
 // Material IDs, read by shaders/garden.frag. Keep the numbers in sync with it.
 enum Material { Moss, PathStone, Gold, Curb, Bark, Leaf, LeafViolet,
                 Soil, Stem, PetalLavender, PetalWhite, FlowerHeart, Hedge,
-                Marble, Water, Crystal, Iron, LanternGlow, CastleStone };
+                Marble, Water, Crystal, Iron, LanternGlow, CastleStone, Sky };
 
 // Same layout as the hall's vertex, so both shaders read the same inputs.
 struct Vertex {
