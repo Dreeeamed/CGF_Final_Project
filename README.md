@@ -45,6 +45,7 @@
 | `shaders/text.*` | Шейдеры текста на экране |
 | `shaders/stone.*` | Материал и освещение фасада |
 | `assets/textures/stone_wall` | Карты камня: цвет, высота, нормали, шероховатость (CC0) |
+| `src/music.*`, `assets/music` | Фоновая музыка по сюжету (miniaudio); авторы и лицензии — `assets/music/SOURCE.md` |
 
 ## Первый запуск в Visual Studio
 
@@ -87,6 +88,7 @@
 | I / K | Поднять / опустить свет (в саду — луну) |
 | Q | Качество POM: Low / Medium / High |
 | V | VSync вкл / выкл |
+| M | Музыка вкл / выкл |
 | H | Подсказка по клавишам на экране |
 | Space | Пауза анимации: частицы, вода, огонь |
 | B | Отсечение задних граней вкл / выкл (выкл — задние стороны красные) |
@@ -101,10 +103,31 @@
 | [GLFW](https://github.com/glfw/glfw/tree/3.4) | 3.4 | Окно, клавиатура, контекст OpenGL | CMake FetchContent, статическая сборка |
 | [GLAD](https://github.com/Dav1dde/glad/tree/v0.1.36) | Генератор 0.1.36, API OpenGL 3.3 | Загрузка функций OpenGL | `third_party/glad`, исходники C |
 | [GLM](https://github.com/g-truc/glm/tree/1.0.1) | 1.0.1 | Векторы, матрицы и преобразования | CMake FetchContent, заголовки |
+| [miniaudio](https://github.com/mackron/miniaudio/tree/0.11.21) + stb_vorbis | 0.11.21 | Фоновая музыка (.ogg, .mp3), зацикливание и плавная смена треков | `third_party/miniaudio`, один заголовок |
 
 Версии GLFW и GLM закреплены, архивы проверяются по SHA-256. Их исходники
 и лицензии находятся в `out/build/<конфигурация>/_deps` после настройки.
-Лицензия GLAD включена в `third_party/glad/LICENSE`.
+Лицензия GLAD включена в `third_party/glad/LICENSE`, лицензия miniaudio
+(public domain или MIT-0, на выбор) — в `third_party/miniaudio/LICENSE`.
+
+## Музыка
+
+Музыка меняется по сюжету и играет по кругу; при смене трека — плавный переход
+(`src/music.cpp`). Файлы не изменены, только переименованы; подробности —
+в `assets/music/SOURCE.md`.
+
+| Где играет | Трек | Автор | Лицензия |
+| --- | --- | --- | --- |
+| Тронный зал, пока ключ не взят | [Loopable Dungeon Ambience](https://opengameart.org/content/loopable-dungeon-ambience) | JaggedStone | CC0 1.0 |
+| Тронный зал, после того как взят ключ | [Throne Room](https://opengameart.org/content/throne-room) | Of Far Different Nature | CC-BY 4.0 |
+| Внутренний сад | [Cathedral in the forest (ambient loop)](https://opengameart.org/content/cathedral-in-the-forest-ambient-loop) | congusbongus | CC0 1.0 |
+
+"Throne Room" by Of Far Different Nature (https://fardifferent.carrd.co/),
+https://opengameart.org/content/throne-room, licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+Заставка играет `assets/music/intro.ogg` или `intro.mp3`, если такой файл есть; без него
+она без музыки. Этого файла нет в репозитории.
 Сгенерированный загрузчик содержит API профиля compatibility 3.3; приложение
 создаёт **core**-контекст OpenGL 3.3 и использует только его функции.
 

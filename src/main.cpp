@@ -27,6 +27,7 @@
 #include "post.h"
 #include "dust.h"
 #include "intro.h"
+#include "music.h"
 
 namespace {
 
@@ -113,13 +114,13 @@ const char* consoleHelp =
     "H help on screen | Space pause (particles, water, flames) | B back faces (culling off, back sides red)\n"
     "Tab free camera (hall and garden): W/S/A/D fly, R/F up / down, arrows or right mouse look, Shift faster\n"
     "E take the key / open the gate / enter the garden / go back at the doorway\n"
-    "G film look (post-processing) on / off | F3 garden (shortcut)\n";
+    "G film look (post-processing) on / off | F3 garden (shortcut) | M music on / off\n";
 
 // The on-screen help is two columns, because the font is not monospaced:
 // line N of `helpKeys` belongs to line N of `helpActions`.
 const char* helpKeys =
     "A / D\nShift\nW / S\nUp / Down\nO\nC\nHome\nF3\n"
-    "E\nP\nG\nQ\nJ / L\nI / K\nSpace\nB\nTab\nV\nH\nEsc";
+    "E\nP\nG\nQ\nJ / L\nI / K\nSpace\nB\nTab\nV\nM\nH\nEsc";
 const char* helpActions =
     "walk left / right\nwalk faster\nhall: zoom in / out   garden: circle the camera up / down\n"
     "camera straight up / down\n"
@@ -129,7 +130,7 @@ const char* helpActions =
     "POM quality: Low / Medium / High\nturn the light\n"
     "raise / lower the light\npause: particles, water, flames\nback-face culling on / off\n"
     "free camera (hall and garden): WASD fly, R / F up / down, arrows or right mouse look\n"
-    "VSync on / off\nhide this help\nquit";
+    "VSync on / off\nmusic on / off\nhide this help\nquit";
 
 // Lesson 20: --benchmark draws these views with POM off, Low, Medium and High,
 // times every pair and prints a table for the report.
@@ -348,6 +349,9 @@ int main(int argc, char* argv[]) {
         std::cerr << "Could not create the intro scene.\n";
         glfwDestroyWindow(window); glfwTerminate(); return 1;
     }
+    // Background music, one track per part of the story (not in the automatic tests).
+    Music music;
+    if (!smokeTest && !benchmark) music.init();
     // The smoke test checks the castle views and the benchmark times them: both skip the intro.
     bool inIntro = !smokeTest && !benchmark;
     float hallFadeIn = 0.0f;     // 1 = black ... 0 = clear: the hall fades in after the intro
@@ -442,7 +446,7 @@ int main(int argc, char* argv[]) {
 
     KeyPress keyC{GLFW_KEY_C}, keyO{GLFW_KEY_O}, keyP{GLFW_KEY_P}, keyQ{GLFW_KEY_Q},
              keyV{GLFW_KEY_V}, keyH{GLFW_KEY_H}, keySpace{GLFW_KEY_SPACE}, keyB{GLFW_KEY_B},
-             keyTab{GLFW_KEY_TAB}, keyE{GLFW_KEY_E}, keyG{GLFW_KEY_G};
+             keyTab{GLFW_KEY_TAB}, keyE{GLFW_KEY_E}, keyG{GLFW_KEY_G}, keyM{GLFW_KEY_M};
     const char* captures[] = {"hall-centre.ppm", "hall-overview.ppm", "hall-entrance.ppm",
                               "hall-throne.ppm", "hall-full-row.ppm", "exterior.ppm",
                               "hall-closeup.ppm", "hall-garden.ppm", "garden.ppm", "garden-flowers.ppm",
@@ -460,6 +464,8 @@ int main(int argc, char* argv[]) {
         // ---- 1b. The intro is the first scene: only START (or Esc) works until it is over ----
         if (inIntro) {
             if (pressed(GLFW_KEY_ESCAPE)) glfwSetWindowShouldClose(window, true);
+            if (keyM.justPressed(window)) music.toggleMute();
+            music.play(Track::Intro);
             int introWidth, introHeight;
             glfwGetFramebufferSize(window, &introWidth, &introHeight);
             if (introWidth == 0 || introHeight == 0) { glfwWaitEvents(); continue; }
@@ -519,6 +525,7 @@ int main(int argc, char* argv[]) {
         if (keyH.justPressed(window)) showHelp = !showHelp;
         if (keySpace.justPressed(window)) paused = !paused;
         if (keyG.justPressed(window)) postOn = !postOn;
+        if (keyM.justPressed(window)) music.toggleMute();
         if (keyTab.justPressed(window) && insideHall) {
             freeCamera = !freeCamera;
             if (freeCamera) {
@@ -741,6 +748,10 @@ int main(int argc, char* argv[]) {
             }
         }
         wasGardenScene = gardenScene;
+        // The music follows the story: a quiet, dark hall until the key is found, the
+        // throne-room theme after it, and its own track in the garden.
+        if (!smokeTest && !benchmark)
+            music.play(gardenScene ? Track::Garden : hasKey ? Track::HallKey : Track::HallQuiet);
         if (gardenScene && !paused && !smokeTest) garden.update(dt);   // fountain water
         // The end of the story: the knight steps onto the fountain's side path. The crystal
         // wakes up first (garden.frag's `ending`, 0 -> 1 in 2.5 s), then the credits fade in.
@@ -978,6 +989,7 @@ int main(int argc, char* argv[]) {
     }
 	//the end of the program: clean up the resources we created
     intro.destroy();
+    music.destroy();
     dust.destroy();
     post.destroy();
     hud.destroy();

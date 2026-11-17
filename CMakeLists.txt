@@ -50,8 +50,9 @@ add_executable(simple_castle
     src/hud.cpp
     src/post.cpp
     src/dust.cpp
+    src/music.cpp
 )
-target_include_directories(simple_castle PRIVATE src third_party/stb)
+target_include_directories(simple_castle PRIVATE src third_party/stb third_party/miniaudio)
 target_link_libraries(simple_castle PRIVATE glfw glad::glad glm::glm)
 target_compile_definitions(simple_castle PRIVATE GLFW_INCLUDE_NONE)
 
