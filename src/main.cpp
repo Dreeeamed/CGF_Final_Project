@@ -198,6 +198,30 @@ void drawHud(Hud& hud, int width, int height, const std::string& info, bool show
     hud.end();
 }
 
+// The end of the story: a dark veil over the garden and the credits in the middle.
+// `fade` goes from 0 to 1, so everything appears slowly (alpha blending, L-7 Buffers).
+void drawCredits(Hud& hud, int width, int height, float fade) {
+    const glm::vec4 gold(1.0f, 0.70f, 0.28f, fade);
+    const glm::vec4 parchment(0.93f, 0.86f, 0.70f, fade);
+    struct Line { const char* text; float scale; glm::vec4 colour; };
+    const Line lines[] = {{"THE END", 6.0f, gold},
+                          {"IT-2510", 3.5f, parchment},
+                          {"Akezhan Muzamelov, Bolatbek Bolat, Adil Dyussenov", 3.0f, parchment}};
+    hud.begin(width, height);
+    hud.rect(0.0f, 0.0f, float(width), float(height), glm::vec4(0.0f, 0.0f, 0.02f, 0.55f * fade));
+    const float oldScale = hud.getScale();
+    float y = float(height) * 0.34f;
+    for (const Line& line : lines) {
+        // Big letters, but never wider than 90% of the window.
+        hud.setScale(1.0f);
+        hud.setScale(std::min(line.scale, 0.9f * float(width) / hud.width(line.text)));
+        hud.text((float(width) - hud.width(line.text)) * 0.5f, y, line.text, line.colour);   // centred
+        y += hud.height(line.text) + 30.0f;
+    }
+    hud.setScale(oldScale);
+    hud.end();
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -344,6 +368,8 @@ int main(int argc, char* argv[]) {
     // The knight in the garden walks along X on the path, like in the hall.
     float gardenKnightX = 0.0f;
     bool wasGardenScene = false;  // to notice the moment the knight enters the garden
+    // The end: seconds since the knight reached the fountain (-1 = not yet).
+    float endingTime = -1.0f;
 
     // The light: yaw turns it around the hall, pitch raises it (radians).
     float lightYaw = glm::radians(60.0f);
@@ -369,7 +395,7 @@ int main(int argc, char* argv[]) {
     const char* captures[] = {"hall-centre.ppm", "hall-overview.ppm", "hall-entrance.ppm",
                               "hall-throne.ppm", "hall-full-row.ppm", "exterior.ppm",
                               "hall-closeup.ppm", "hall-garden.ppm", "garden.ppm", "garden-flowers.ppm",
-                              "garden-benches.ppm", "garden-entrance.ppm"};
+                              "garden-benches.ppm", "garden-entrance.ppm", "garden-credits.ppm"};
     std::cout << consoleHelp;
 
     while (!glfwWindowShouldClose(window)) {
@@ -548,6 +574,7 @@ int main(int argc, char* argv[]) {
             hasKey = false; gateLift = 0.0f; inGarden = false; gardenWalk = 0.0f;
             gardenShortcut = false; gardenCameraX = 0; gardenDistance = 22; gardenLook = 2.5f;
             gardenKnightX = -3.0f;   // on the path, just left of the fountain's side path
+            endingTime = -1.0f;
             cameraX = 0; knightX = -6; distance = 84; lookHeight = 24;
             if (capture) {
                 if (renderedFrames == 1) { distance = 154; lookHeight = 26; }
@@ -579,6 +606,10 @@ int main(int argc, char* argv[]) {
                 if (renderedFrames == 11) {   // the entrance: the knight steps out of the doorway
                     gardenCameraX = royal_garden::layout::startX + 5.0f; gardenDistance = 18.0f;
                     gardenKnightX = royal_garden::layout::startX + 2.5f;
+                }
+                if (renderedFrames == 12) {   // the end: the knight at the fountain, credits shown
+                    gardenKnightX = royal_garden::layout::fountainX;
+                    endingTime = 10.0f;
                 }
             } else {
                 if (renderedFrames == 1) showForeground = true;
@@ -624,6 +655,20 @@ int main(int argc, char* argv[]) {
         }
         wasGardenScene = gardenScene;
         if (gardenScene && !paused && !smokeTest) garden.update(dt);   // fountain water
+        // The end of the story: the knight steps onto the fountain's side path. The crystal
+        // wakes up first (garden.frag's `ending`, 0 -> 1 in 2.5 s), then the credits fade in.
+        // Leaving the garden resets it, so the ending can be played again.
+        if (!gardenScene) {
+            endingTime = -1.0f;
+        } else if (!smokeTest) {
+            namespace gl = royal_garden::layout;
+            if (endingTime < 0.0f && std::abs(gardenKnightX - gl::fountainX) < gl::branchHalfWidth)
+                endingTime = 0.0f;
+            else if (endingTime >= 0.0f && !paused)
+                endingTime += dt;
+        }
+        const float ending = endingTime < 0.0f ? 0.0f : std::min(endingTime / 2.5f, 1.0f);
+        const float creditsFade = std::clamp((endingTime - 2.0f) / 2.0f, 0.0f, 1.0f);
 
         // ---- 6. Draw the scene ---------------------------------------------
         int width, height;
@@ -674,6 +719,7 @@ int main(int argc, char* argv[]) {
 
         if (gardenScene) {
             garden.setLights(gardenProgram);
+            glUniform1f(glGetUniformLocation(gardenProgram, "ending"), ending);
             garden.draw();
             // The knight is the team's model, with the team's materials: draw him with the
             // hall shader, so he looks the same in every scene. That shader's matrices and
@@ -744,6 +790,7 @@ int main(int argc, char* argv[]) {
         const std::string hint = (insideHall && !freeCamera)
                                ? questHint(nearKey, nearGate, hasKey, gateLift, inGarden || gardenShortcut) : "";
         drawHud(hud, width, height, info, showHelp, culling, hint);
+        if (creditsFade > 0.0f) drawCredits(hud, width, height, creditsFade);
         if (hallFadeIn > 0.0f) {
             hallFadeIn = std::max(hallFadeIn - frameTime / 0.8f, 0.0f);
             const float eased = hallFadeIn * hallFadeIn * (3.0f - 2.0f * hallFadeIn);
@@ -761,7 +808,7 @@ int main(int argc, char* argv[]) {
             if (error != GL_NO_ERROR) {
                 std::cerr << "OpenGL smoke test failed: " << error << '\n'; exitCode = 1; break;
             }
-            if (++renderedFrames == (capture ? 12 : 4)) {
+            if (++renderedFrames == (capture ? 13 : 4)) {
                 std::cout << "Smoke test passed: " << renderedFrames << " frames rendered.\n";
                 break;
             }
