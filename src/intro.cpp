@@ -253,10 +253,18 @@ void Intro::drawButton(Hud& hud, int width, int height) {
         // Title.
         const std::string title = "THE CASTLE";
         hud.setScale(7.0f * k);
-        hud.text((float(width) - hud.width(title)) * 0.5f, float(height) * 0.10f, title, parchment);
+        hud.text((float(width) - hud.width(title)) * 0.5f, float(height) * 0.10f, title, gold);
         const std::string subtitle = "Topic 15: 2.5D castle with parallax occlusion on walls";
         hud.setScale(2.0f * k);
-        hud.text((float(width) - hud.width(subtitle)) * 0.5f, float(height) * 0.10f + 90.0f * k, subtitle, gold);
+        hud.text((float(width) - hud.width(subtitle)) * 0.5f, float(height) * 0.10f + 90.0f * k, subtitle, parchment);
+        // The story in one line, and who made it.
+        const std::string story = "The castle has slept for a hundred years. One knight comes back to wake its heart.";
+        hud.text((float(width) - hud.width(story)) * 0.5f, float(height) * 0.10f + 122.0f * k, story,
+                 glm::vec4(0.80f, 0.66f, 1.0f, visible));
+        const std::string team = "Akezhan Muzamelov      Bolatbek Bolat      Adil Dyussenov";
+        hud.text((float(width) - hud.width(team)) * 0.5f, float(height) - 56.0f * k, team, gold);
+        const std::string school = "Astana IT University - Computer Graphics Fundamentals, 2026";
+        hud.text((float(width) - hud.width(school)) * 0.5f, float(height) - 30.0f * k, school, parchment);
 
         // Button: a dark plate with a golden frame; it lights up under the mouse.
         const Rect b = buttonRect(width, height);

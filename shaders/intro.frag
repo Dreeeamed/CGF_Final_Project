@@ -194,6 +194,14 @@ vec4 castleLayer(vec2 p, float px) {
     float flicker = 0.8 + 0.2 * sin(time * (3.0 + 4.0 * hash21(wc + 9.0)) + hash21(wc) * 20.0);
     c += lin(vec3(1.0, 0.68, 0.30)) * window * 2.2 * flicker;
 
+    // The heart of the castle: one tall window high in the central tower glows violet,
+    // the same magic colour as the braziers in the throne hall and the crystal in the garden.
+    vec2 hq = p - vec2(0.0, 45.0);
+    float heart = (1.0 - smoothstep(0.9, 1.2, abs(hq.x))) * (1.0 - smoothstep(2.6, 3.0, abs(hq.y)));
+    float beat = 0.8 + 0.2 * sin(time * 1.6);
+    c = mix(c, lin(vec3(0.62, 0.26, 1.0)) * 3.2 * beat, heart);
+    c += lin(vec3(0.62, 0.26, 1.0)) * exp(-dot(hq, hq) * 0.02) * 0.55 * beat;   // light on the stone round it
+
     // The gate: warm light from the courtyard behind iron bars, and a torch on each side.
     float gate = gateSdf(p);
     if (gate < 0.0) {
@@ -401,6 +409,18 @@ void layerPoint(float D, vec3 ro, vec3 rd, out float t, out vec2 p, out float px
     px = max(length(fwidth(p)), 1e-4) * 0.75;
 }
 
+// A sheet of low mist standing at distance D. It drifts sideways with time, and because
+// it is one more layer at its own distance, it slides against its neighbours when the
+// camera moves: the parallax is easier to see.
+void paintMist(inout vec3 col, float D, vec3 ro, vec3 rd, float seed, float strength) {
+    float t, px; vec2 p;
+    layerPoint(D, ro, rd, t, p, px);
+    if (t <= 0.0 || p.y < 0.0) return;
+    float cloud = fbm(vec2(p.x * 0.035 + time * 0.035 + seed, p.y * 0.16 - time * 0.01));
+    float low = 1.0 - smoothstep(0.0, 13.0, p.y);                // only near the ground
+    col = mix(col, horizonColour() * 1.5, smoothstep(0.35, 0.85, cloud) * low * strength);
+}
+
 // Where the ray meets the knight's plane, and his cut-out painted over the picture.
 void paintKnight(inout vec3 col, vec3 ro, vec3 rd) {
     float t, px; vec2 p;
@@ -442,6 +462,8 @@ void main() {
     layerPoint(D_CASTLE, ro, rd, t, p, px);
     if (t > 0.0 && p.y >= 0.0) { vec4 l = castleLayer(p, px); col = mix(col, withFog(l.rgb, t), l.a); }
 
+    paintMist(col, 112.0, ro, rd, 0.0, 0.55);   // between the castle and the far trees
+
     // Trees stand to the sides and leave the castle and the trail free.
     if (!knightDone && kd > D_FOREST) { paintKnight(col, ro, rd); knightDone = true; }
     layerPoint(D_FOREST, ro, rd, t, p, px);
@@ -449,6 +471,7 @@ void main() {
         vec4 l = pineLayer(p, px, 4.5, 8.0, 18.0, 1.0, 0.0, 36.0, 0.95, lin(vec3(0.025, 0.04, 0.06)));
         col = mix(col, withFog(l.rgb, t), l.a);
     }
+    paintMist(col, 56.0, ro, rd, 7.3, 0.40);    // between the far and the middle trees
     if (!knightDone && kd > D_MID) { paintKnight(col, ro, rd); knightDone = true; }
     layerPoint(D_MID, ro, rd, t, p, px);
     if (t > 0.0 && p.y >= 0.0) {

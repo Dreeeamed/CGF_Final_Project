@@ -106,28 +106,29 @@ glm::vec3 directionFromAngles(float yaw, float pitch) {
 // ---------------------------------------------------------------------------
 
 const char* consoleHelp =
-    "F1 exterior | F2 hall | A/D walk | Shift faster | W/S zoom\n"
-    "Up/Down look | C full hall / cutaway | O overview | P parallax | Home reset | Esc quit\n"
-    "J/L turn the light | I/K raise / lower the light\n"
+    "A/D walk | Shift faster | W/S zoom (hall) or circle the camera up / down (garden)\n"
+    "Up/Down camera higher / lower | C full hall / cutaway | O overview | P parallax | Home reset | Esc quit\n"
+    "J/L turn the light | I/K raise / lower the light (hall and garden)\n"
     "Q quality (Low / Medium / High) | V VSync on / off\n"
-    "H help on screen | Space pause | B back faces (culling off, back sides red)\n"
-    "Tab free camera: W/S/A/D fly, R/F up / down, arrows or right mouse look, Shift faster\n"
-    "E take the key / open the gate / enter the garden\n"
-    "G film look (post-processing) on / off | F3 garden (shortcut while we build it)\n";
+    "H help on screen | Space pause (particles, water, flames) | B back faces (culling off, back sides red)\n"
+    "Tab free camera (hall and garden): W/S/A/D fly, R/F up / down, arrows or right mouse look, Shift faster\n"
+    "E take the key / open the gate / enter the garden / go back at the doorway\n"
+    "G film look (post-processing) on / off | F3 garden (shortcut)\n";
 
 // The on-screen help is two columns, because the font is not monospaced:
 // line N of `helpKeys` belongs to line N of `helpActions`.
 const char* helpKeys =
-    "A / D\nShift\nW / S\nUp / Down\nO\nC\nHome\nF1 / F2 / F3\n"
+    "A / D\nShift\nW / S\nUp / Down\nO\nC\nHome\nF3\n"
     "E\nP\nG\nQ\nJ / L\nI / K\nSpace\nB\nTab\nV\nH\nEsc";
 const char* helpActions =
-    "walk left / right\nwalk faster\nzoom in / out\nlook higher / lower\n"
-    "overview of the hall\nfull hall / cutaway\nreset the camera\nexterior / hall / garden\n"
+    "walk left / right\nwalk faster\nhall: zoom in / out   garden: circle the camera up / down\n"
+    "camera straight up / down\n"
+    "overview of the hall / of the garden\nfull hall / cutaway\nreset the camera\ngarden (shortcut)\n"
     "take the key / open the gate / enter the garden\n"
     "parallax occlusion on / off\nfilm look (post-processing) on / off\n"
     "POM quality: Low / Medium / High\nturn the light\n"
-    "raise / lower the light\npause animation\nback-face culling on / off\n"
-    "free camera: WASD fly, R / F up / down, arrows or right mouse look\n"
+    "raise / lower the light\npause: particles, water, flames\nback-face culling on / off\n"
+    "free camera (hall and garden): WASD fly, R / F up / down, arrows or right mouse look\n"
     "VSync on / off\nhide this help\nquit";
 
 // Lesson 20: --benchmark draws these views with POM off, Low, Medium and High,
@@ -219,6 +220,36 @@ void drawCredits(Hud& hud, int width, int height, float fade) {
         y += hud.height(line.text) + 30.0f;
     }
     hud.setScale(oldScale);
+    hud.end();
+}
+
+// The story on screen: the goal (top right) and a line of narration that fades in and
+// out (top centre, bigger letters). `lineAlpha` 0..1 is how visible the narration is.
+void drawStory(Hud& hud, int width, int height, const std::string& goal, const std::string& line,
+               float lineAlpha) {
+    const glm::vec3 parchment(0.93f, 0.86f, 0.70f), gold(1.0f, 0.70f, 0.28f);
+    hud.begin(width, height);
+    const float goalX = float(width) - hud.width(goal) - 32.0f;
+    hud.rect(goalX - 16, 16, hud.width(goal) + 32, hud.height(goal) + 24, glm::vec4(0.02f, 0.03f, 0.05f, 0.65f));
+    hud.text(goalX, 28, goal, glm::vec4(gold, 1.0f));
+
+    if (lineAlpha > 0.0f && !line.empty()) {
+        const float oldScale = hud.getScale();
+        hud.setScale(3.0f);
+        // Every line of the narration is centred on its own.
+        const float lines = 1.0f + float(std::count(line.begin(), line.end(), '\n'));
+        float y = float(height) * 0.15f;
+        hud.rect(0, y - 22, float(width), lines * 39.0f + 36, glm::vec4(0.0f, 0.0f, 0.0f, 0.5f * lineAlpha));
+        std::size_t start = 0;
+        while (start < line.size()) {
+            const std::size_t end = std::min(line.find('\n', start), line.size());
+            const std::string one = line.substr(start, end - start);
+            hud.text((float(width) - hud.width(one)) * 0.5f, y, one, glm::vec4(parchment, lineAlpha));
+            y += 39.0f;
+            start = end + 1;
+        }
+        hud.setScale(oldScale);
+    }
     hud.end();
 }
 
@@ -370,10 +401,30 @@ int main(int argc, char* argv[]) {
     bool wasGardenScene = false;  // to notice the moment the knight enters the garden
     // The end: seconds since the knight reached the fountain (-1 = not yet).
     float endingTime = -1.0f;
+    // The garden camera circles round the point it looks at: W/S change the angle above
+    // the ground (0 = level, 1.3 = almost from above), the distance stays the same.
+    // Up/Down move the whole camera straight up / down (gardenLook). O: the whole garden.
+    const float gardenOrbitStart = std::atan2(4.0f, 22.0f);   // the old fixed view: 4 m up, 22 m away
+    float gardenOrbit = gardenOrbitStart;
+    bool gardenOverview = false;
+    // The garden's doorway back into the castle, at the left end of the path.
+    const float gardenDoorX = royal_garden::layout::startX + 2.5f;
 
-    // The light: yaw turns it around the hall, pitch raises it (radians).
+    // The light: yaw turns it around, pitch raises it (radians). The hall and the garden
+    // each keep their own light; J/L/I/K move the one of the scene on screen.
     float lightYaw = glm::radians(60.0f);
     float lightPitch = glm::radians(25.0f);
+    const glm::vec3 moonStart = glm::normalize(royal_garden::moonDirection);
+    float gardenLightYaw = std::atan2(moonStart.x, moonStart.z);
+    float gardenLightPitch = std::asin(moonStart.y);
+
+    // The story: a line of narration appears at the top for a few seconds when something
+    // happens; the goal is always shown at the top right.
+    std::string storyLine;
+    float storyTimer = 0.0f;
+    const float storySeconds = 8.0f;
+    auto tell = [&](const char* text) { storyLine = text; storyTimer = storySeconds; };
+    float knightStep = 0.0f;   // the knight's walk cycle (radians): he bobs and leans while he walks
 
     // Clocks and counters.
     float previousTime = static_cast<float>(glfwGetTime());
@@ -428,29 +479,27 @@ int main(int argc, char* argv[]) {
                 hasKey = false; gateOpening = false; gateLift = 0.0f; inGarden = false; gardenWalk = 0.0f;
                 hallFadeIn = 1.0f;                                  // the hall appears out of the black
                 previousTime = static_cast<float>(glfwGetTime());   // no big time jump in the castle
+                tell("The castle has been silent for a hundred years.\n"
+                     "Its heart still sleeps in the royal garden. Find the golden key.");
             }
             continue;
         }
 
         // ---- 2. Keys that switch something --------------------------------
         if (pressed(GLFW_KEY_ESCAPE)) glfwSetWindowShouldClose(window, true);
-        if (pressed(GLFW_KEY_F1) && insideHall) {
-            insideHall = false; overview = false; freeCamera = false; gardenShortcut = false;
-            cameraX = 0; distance = 14; lookHeight = 3.5f;
-        }
-        if (pressed(GLFW_KEY_F2) && !insideHall) {
-            insideHall = true; gardenShortcut = false;
-            cameraX = knightX; distance = 84; lookHeight = 24;
-        }
         if (pressed(GLFW_KEY_F3) && !gardenShortcut) {
             insideHall = true; gardenShortcut = true; freeCamera = false;
         }
         bool gardenScene = gardenShortcut || (insideHall && inGarden && gardenWalk >= 1.0f);
         if (keyC.justPressed(window)) showForeground = !showForeground;
-        if (keyO.justPressed(window) && insideHall) {
-            overview = !overview;
-            distance = overview ? 154.0f : 84.0f;
-            lookHeight = overview ? 26.0f : 24.0f;
+        if (keyO.justPressed(window) && insideHall && !freeCamera) {
+            if (gardenScene) {
+                gardenOverview = !gardenOverview;   // the whole garden, or back to the knight
+            } else {
+                overview = !overview;
+                distance = overview ? 154.0f : 84.0f;
+                lookHeight = overview ? 26.0f : 24.0f;
+            }
         }
         if (keyP.justPressed(window)) {
             parallaxOn = !parallaxOn;
@@ -470,12 +519,18 @@ int main(int argc, char* argv[]) {
         if (keyH.justPressed(window)) showHelp = !showHelp;
         if (keySpace.justPressed(window)) paused = !paused;
         if (keyG.justPressed(window)) postOn = !postOn;
-        if (keyTab.justPressed(window) && insideHall && !gardenScene) {
+        if (keyTab.justPressed(window) && insideHall) {
             freeCamera = !freeCamera;
             if (freeCamera) {
-                // Start inside the hall, above the 2.5D camera's spot, looking at what it looked at.
+                // Start above the 2.5D camera's spot, looking at what it looked at:
+                // inside the hall, or over the garden path.
+                glm::vec3 target(cameraX, lookHeight, 0);
                 freePos = glm::vec3(cameraX, lookHeight + 12.0f, 16.0f);
-                const glm::vec3 look = glm::normalize(glm::vec3(cameraX, lookHeight, 0) - freePos);
+                if (gardenScene) {
+                    target = glm::vec3(gardenCameraX, gardenLook, 0);
+                    freePos = glm::vec3(gardenCameraX, gardenLook + 6.0f, 14.0f);
+                }
+                const glm::vec3 look = glm::normalize(target - freePos);
                 freeYaw = std::atan2(look.x, -look.z);
                 freePitch = std::asin(look.y);
                 glfwGetCursorPos(window, &lastMouseX, &lastMouseY);
@@ -486,20 +541,28 @@ int main(int argc, char* argv[]) {
             if (culling) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
         }
         if (pressed(GLFW_KEY_HOME) && insideHall) {
-            overview = false; showForeground = false;
-            distance = 84; lookHeight = 24;
+            if (gardenScene) {
+                gardenOverview = false; gardenOrbit = gardenOrbitStart; gardenDistance = 22; gardenLook = 2.5f;
+            } else {
+                overview = false; showForeground = false;
+                distance = 84; lookHeight = 24;
+            }
         }
         if (!paused) animTime += dt;
 
         // ---- 3. Light (J/L turn, I/K raise) -------------------------------
         // Keys held down: +1, -1 or 0, times the speed, times the frame time.
-        lightYaw += (float(pressed(GLFW_KEY_L)) - float(pressed(GLFW_KEY_J))) * dt * 1.2f;
-        lightPitch += (float(pressed(GLFW_KEY_I)) - float(pressed(GLFW_KEY_K))) * dt * 0.8f;
-        lightPitch = std::clamp(lightPitch, 0.05f, 1.5f);
-        // Angles -> direction (spherical coordinates): towards the light.
-        const glm::vec3 lightDir(std::cos(lightPitch) * std::sin(lightYaw),
-                                 std::sin(lightPitch),
-                                 std::cos(lightPitch) * std::cos(lightYaw));
+        // The keys move the light of the scene on screen: the hall's, or the garden's moon.
+        float& activeYaw = gardenScene ? gardenLightYaw : lightYaw;
+        float& activePitch = gardenScene ? gardenLightPitch : lightPitch;
+        activeYaw += (float(pressed(GLFW_KEY_L)) - float(pressed(GLFW_KEY_J))) * dt * 1.2f;
+        activePitch += (float(pressed(GLFW_KEY_I)) - float(pressed(GLFW_KEY_K))) * dt * 0.8f;
+        activePitch = std::clamp(activePitch, 0.05f, 1.5f);
+        // Angles -> direction (spherical coordinates): towards the light. Used when drawing,
+        // once we know for sure which scene this frame shows.
+        auto lightFromAngles = [](float yaw, float pitch) {
+            return glm::vec3(std::cos(pitch) * std::sin(yaw), std::sin(pitch), std::cos(pitch) * std::cos(yaw));
+        };
 
         // ---- 4. Frame rate in the window title, twice a second -------------
         fpsFrames++;
@@ -536,14 +599,17 @@ int main(int argc, char* argv[]) {
             freePos += (forward * ahead + right * direction + glm::vec3(0, rise, 0)) * speed * dt;
             // Stay inside the hall: the walls have no outer side to look at.
             // Lesson 16: up to 66 m, to look at the ribs (the vault is 70 m high above z = 18).
-            freePos = glm::clamp(freePos, glm::vec3(-106, 1, -18), glm::vec3(106, 66, 18));
+            // In the garden: over the whole garden, in front of the painted sky.
+            if (gardenScene) freePos = glm::clamp(freePos, glm::vec3(-64, 0.5f, -28), glm::vec3(64, 45, 45));
+            else freePos = glm::clamp(freePos, glm::vec3(-106, 1, -18), glm::vec3(106, 66, 18));
         } else if (gardenScene) {
             // Garden: A/D walk the knight along the path; the camera follows him the same
-            // way as in the hall (every frame it closes part of the gap).
+            // way as in the hall (every frame it closes part of the gap). In the overview (O)
+            // the camera looks at the middle of the garden.
             namespace gl = royal_garden::layout;
             const float speed = pressed(GLFW_KEY_LEFT_SHIFT) ? 18.0f : 7.0f;
             gardenKnightX = std::clamp(gardenKnightX + direction * speed * dt, gl::startX + 1.5f, gl::endX - 1.5f);
-            const float targetX = std::clamp(gardenKnightX, gl::startX + 5.0f, gl::endX - 5.0f);
+            const float targetX = gardenOverview ? 0.0f : std::clamp(gardenKnightX, gl::startX + 5.0f, gl::endX - 5.0f);
             gardenCameraX += (targetX - gardenCameraX) * (1.0f - std::exp(-5.0f * dt));
         } else if (insideHall) {
             float speed = pressed(GLFW_KEY_LEFT_SHIFT) ? 18.0f : 7.0f;
@@ -559,7 +625,9 @@ int main(int argc, char* argv[]) {
         const float zoom = freeCamera ? 0.0f : float(pressed(GLFW_KEY_S)) - float(pressed(GLFW_KEY_W));
         const float tilt = freeCamera ? 0.0f : float(pressed(GLFW_KEY_UP)) - float(pressed(GLFW_KEY_DOWN));
         if (gardenScene) {
-            gardenDistance = std::clamp(gardenDistance + zoom * dt * 12.0f, 8.0f, 60.0f);
+            // W/S: the camera circles up / down round the point it looks at (same distance).
+            // Up/Down: the camera and that point move straight up / down together.
+            gardenOrbit = std::clamp(gardenOrbit - zoom * dt * 0.7f, 0.03f, 1.35f);
             gardenLook = std::clamp(gardenLook + tilt * dt * 6.0f, 0.0f, 20.0f);
         } else {
             distance += zoom * dt * (insideHall ? 28.0f : 4.0f);
@@ -575,6 +643,7 @@ int main(int argc, char* argv[]) {
             gardenShortcut = false; gardenCameraX = 0; gardenDistance = 22; gardenLook = 2.5f;
             gardenKnightX = -3.0f;   // on the path, just left of the fountain's side path
             endingTime = -1.0f;
+            gardenOrbit = gardenOrbitStart; gardenOverview = false; knightStep = 0.0f;
             cameraX = 0; knightX = -6; distance = 84; lookHeight = 24;
             if (capture) {
                 if (renderedFrames == 1) { distance = 154; lookHeight = 26; }
@@ -633,10 +702,20 @@ int main(int argc, char* argv[]) {
         // ---- 5b. The quest ---------------------------------------------------
         const bool nearKey = !hasKey && std::abs(knightX - keyX) < 3.0f;
         const bool nearGate = std::abs(knightX - gateX) < 5.0f;
+        // In the garden the way back is the doorway in the castle wall, at the left end.
+        const bool nearDoorway = gardenKnightX < gardenDoorX + 4.0f;
         if (keyE.justPressed(window) && insideHall && !freeCamera) {
             if (gardenShortcut) gardenShortcut = false;   // E leaves the F3 garden too
-            else if (nearKey) hasKey = true;
-            else if (nearGate && hasKey && !gateOpening) gateOpening = true;
+            else if (gardenScene) { if (nearDoorway) inGarden = false; }
+            else if (nearKey) {
+                hasKey = true;
+                tell("The key is warm, as if someone had just held it.\n"
+                     "The old gate at the entrance leads to the royal garden.");
+            }
+            else if (nearGate && hasKey && !gateOpening) {
+                gateOpening = true;
+                tell("The portcullis wakes up after a hundred years.");
+            }
             else if (nearGate && gateLift >= 1.0f) inGarden = !inGarden;
         }
         if (!paused && !smokeTest) {   // the smoke test shows fixed states
@@ -647,11 +726,19 @@ int main(int argc, char* argv[]) {
         }
         // The walk may have just finished, or E just sent the knight back.
         gardenScene = gardenShortcut || (insideHall && inGarden && gardenWalk >= 1.0f);
-        if (gardenScene && !wasGardenScene && !smokeTest) {
-            // The knight has just come through the gate: he steps out of the castle
-            // doorway at the left end of the garden, and the camera starts there too.
-            gardenKnightX = royal_garden::layout::startX + 2.5f;
-            gardenCameraX = royal_garden::layout::startX + 5.0f;
+        if (gardenScene != wasGardenScene && !smokeTest && !benchmark) {
+            hallFadeIn = 1.0f;     // every scene change appears out of the black
+            freeCamera = false;    // the free camera's place belongs to the old scene
+            if (gardenScene) {
+                // The knight has just come through the gate: he steps out of the castle
+                // doorway at the left end of the garden, and the camera starts there too.
+                gardenKnightX = gardenDoorX;
+                gardenCameraX = royal_garden::layout::startX + 5.0f;
+                gardenOverview = false;
+                if (!gardenShortcut)
+                    tell("The Forgotten Royal Garden. The lanterns are still burning.\n"
+                         "Follow the path to the fountain.");
+            }
         }
         wasGardenScene = gardenScene;
         if (gardenScene && !paused && !smokeTest) garden.update(dt);   // fountain water
@@ -662,13 +749,33 @@ int main(int argc, char* argv[]) {
             endingTime = -1.0f;
         } else if (!smokeTest) {
             namespace gl = royal_garden::layout;
-            if (endingTime < 0.0f && std::abs(gardenKnightX - gl::fountainX) < gl::branchHalfWidth)
+            if (endingTime < 0.0f && std::abs(gardenKnightX - gl::fountainX) < gl::branchHalfWidth) {
                 endingTime = 0.0f;
+                tell("The heart of the garden wakes up.\nThe castle is silent no more.");
+            }
             else if (endingTime >= 0.0f && !paused)
                 endingTime += dt;
         }
         const float ending = endingTime < 0.0f ? 0.0f : std::min(endingTime / 2.5f, 1.0f);
         const float creditsFade = std::clamp((endingTime - 2.0f) / 2.0f, 0.0f, 1.0f);
+
+        // The walk cycle runs while the knight really walks (A / D, or through the gate).
+        if (!smokeTest && !benchmark) {
+            const bool throughGate = gardenWalk > 0.0f && gardenWalk < 1.0f;
+            const bool walking = insideHall && !freeCamera && (throughGate || direction != 0.0f);
+            if (walking) knightStep += dt * (pressed(GLFW_KEY_LEFT_SHIFT) ? 15.0f : 10.0f);
+            else knightStep = 0.0f;
+        }
+        // The knight's model matrix: his feet at `feet`; while walking he bobs a little and
+        // leans into the direction he walks.
+        auto knightModel = [&](glm::vec3 feet) {
+            glm::mat4 model = glm::translate(glm::mat4(1), feet);
+            if (knightStep != 0.0f) {
+                model = glm::translate(model, glm::vec3(0, std::abs(std::sin(knightStep)) * 0.05f, 0));
+                model = glm::rotate(model, -direction * 0.07f + std::sin(knightStep) * 0.025f, glm::vec3(0, 0, 1));
+            }
+            return model;
+        };
 
         // ---- 6. Draw the scene ---------------------------------------------
         int width, height;
@@ -682,9 +789,15 @@ int main(int argc, char* argv[]) {
 
         glm::vec3 cameraPos(cameraX, insideHall ? lookHeight + 12.0f : 4.0f, distance);
         glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(cameraX, lookHeight, 0), glm::vec3(0, 1, 0));
-        if (gardenScene) {   // the same kind of 2.5D camera, with the garden's own values
-            cameraPos = glm::vec3(gardenCameraX, gardenLook + 4.0f, gardenDistance);
-            view = glm::lookAt(cameraPos, glm::vec3(gardenCameraX, gardenLook, 0), glm::vec3(0, 1, 0));
+        if (gardenScene) {
+            // The garden's 2.5D camera sits on a circle round the point it looks at:
+            // `gardenOrbit` is the angle above the ground (W/S), the radius stays the same.
+            // The overview (O) is the same camera, far away and high, at the garden's middle.
+            const float radius = gardenOverview ? 88.0f : std::hypot(gardenDistance, 4.0f);
+            const float angle = gardenOverview ? std::max(gardenOrbit, 0.45f) : gardenOrbit;
+            const glm::vec3 target(gardenCameraX, gardenLook, 0);
+            cameraPos = target + radius * glm::vec3(0, std::sin(angle), std::cos(angle));
+            view = glm::lookAt(cameraPos, target, glm::vec3(0, 1, 0));
         }
         if (freeCamera) {
             cameraPos = freePos;
@@ -697,6 +810,9 @@ int main(int argc, char* argv[]) {
         setMatrix(program, "model", glm::mat4(1));
         setMatrix(program, "view", view);
         setMatrix(program, "projection", projection);
+        // The hall's light, or the garden's moon (both moved by J/L/I/K).
+        const glm::vec3 lightDir = gardenScene ? lightFromAngles(gardenLightYaw, gardenLightPitch)
+                                               : lightFromAngles(lightYaw, lightPitch);
         glUniform3fv(glGetUniformLocation(program, "lightDir"), 1, glm::value_ptr(lightDir));
         glUniform3fv(glGetUniformLocation(program, "cameraPos"), 1, glm::value_ptr(cameraPos));
         glUniform3f(glGetUniformLocation(program, "lightPos"), -8, 12, 6);
@@ -729,16 +845,16 @@ int main(int argc, char* argv[]) {
             setMatrix(hallProgram, "projection", projection);
             glUniform3fv(glGetUniformLocation(hallProgram, "cameraPos"), 1, glm::value_ptr(cameraPos));
             // In the garden the knight is lit like the garden: by its moon, lanterns and crystal.
-            glUniform3fv(glGetUniformLocation(hallProgram, "lightDir"), 1,
-                         glm::value_ptr(royal_garden::moonDirection));
+            glUniform3fv(glGetUniformLocation(hallProgram, "lightDir"), 1, glm::value_ptr(lightDir));
             glUniform1f(glGetUniformLocation(hallProgram, "time"), clock);
             glUniform1i(glGetUniformLocation(hallProgram, "gardenLights"), 1);
             garden.setLights(hallProgram);
-            setMatrix(hallProgram, "model", glm::translate(glm::mat4(1),
-                      glm::vec3(gardenKnightX, royal_garden::layout::pathTop, royal_garden::layout::walkZ)));
+            setMatrix(hallProgram, "model",
+                      knightModel(glm::vec3(gardenKnightX, royal_garden::layout::pathTop, royal_garden::layout::walkZ)));
             hall.knight.draw();
             // A uniform keeps its value: switch back, so the hall has its chandeliers again.
             glUniform1i(glGetUniformLocation(hallProgram, "gardenLights"), 0);
+            setMatrix(hallProgram, "model", glm::mat4(1));
             garden.drawEffects(view, projection, clock, height);   // see-through water and dust last
         } else if (insideHall) {
             hall.architecture.draw();
@@ -752,7 +868,7 @@ int main(int argc, char* argv[]) {
             // The knight: on the carpet, or part of the way into the gate (gardenWalk).
             const float walkX = knightX + (gateX - knightX) * gardenWalk;
             const float walkZ = -11.0f * gardenWalk;
-            setMatrix(program, "model", glm::translate(glm::mat4(1), glm::vec3(walkX, 0.06f, walkZ)));
+            setMatrix(program, "model", knightModel(glm::vec3(walkX, 0.06f, walkZ)));
             hall.knight.draw();
             // The portcullis, lifted by up to 4.6 m.
             setMatrix(program, "model", glm::translate(glm::mat4(1), glm::vec3(0, gateLift * 4.6f, 0)));
@@ -787,9 +903,26 @@ int main(int argc, char* argv[]) {
         // ---- 7. Text over the picture --------------------------------------
         const std::string info = infoText(parallaxOn, qualities[quality], vsync, postOn, paused,
                                           freeCamera, hasKey, shownFps);
-        const std::string hint = (insideHall && !freeCamera)
-                               ? questHint(nearKey, nearGate, hasKey, gateLift, inGarden || gardenShortcut) : "";
+        std::string hint;
+        if (freeCamera || !insideHall) hint = "";
+        else if (gardenShortcut) hint = "The inner garden (F3 shortcut).   E - back to the hall";
+        else if (gardenScene) hint = nearDoorway ? "The doorway to the throne hall.   E - go back" : "";
+        else hint = questHint(nearKey, nearGate, hasKey, gateLift, inGarden);
         drawHud(hud, width, height, info, showHelp, culling, hint);
+        if (!smokeTest && !benchmark && insideHall && !freeCamera && creditsFade == 0.0f) {
+            // What to do next (top right), and the narration line, which fades in and out.
+            const char* goal = gardenShortcut ? "Garden shortcut: walk around, E - back"
+                             : endingTime >= 0.0f ? "The story is complete. Walk on, or Esc to quit"
+                             : gardenScene ? "Goal: follow the path to the fountain (D - walk right)"
+                             : !hasKey ? "Goal: find the golden key at the throne (D - walk right)"
+                             : gateLift == 0.0f ? "Goal: open the entrance gate with the key (A - walk left)"
+                             : gateLift < 1.0f ? "The gate is rising..."
+                             : "Goal: step through the gate into the garden (E)";
+            const float lineAlpha = storyTimer > 0.0f
+                ? std::min({1.0f, storyTimer / 1.2f, (storySeconds - storyTimer) / 0.6f}) : 0.0f;
+            drawStory(hud, width, height, goal, storyLine, lineAlpha);
+        }
+        storyTimer = std::max(storyTimer - frameTime, 0.0f);
         if (creditsFade > 0.0f) drawCredits(hud, width, height, creditsFade);
         if (hallFadeIn > 0.0f) {
             hallFadeIn = std::max(hallFadeIn - frameTime / 0.8f, 0.0f);

@@ -44,7 +44,9 @@ const vec2 fountainCentre = vec2(0.0, -12.0);
 uniform int lanternCount;
 uniform vec3 lanternLights[16];   // flame centres (16 = maxLanternLights in garden_scene.h)
 uniform vec3 crystalLight;        // centre of the fountain's crystal
-const vec3 moonDir = normalize(vec3(-0.4, 0.8, 0.45));   // = moonDirection in garden_scene.h
+uniform vec3 lightDir;   // towards the moon; starts at moonDirection (garden_scene.h), J/L/I/K move it
+uniform vec2 pomLayers;  // Q: x = layers looking straight down, y = layers at grazing angles (as in the hall)
+uniform int shadowSteps; // Q: steps of the walk towards the moon
 
 // Garden palette (hex design targets / 255).
 const vec3 mossColour  = vec3(0.188, 0.302, 0.325);  // #304D53 desaturated teal
@@ -142,12 +144,12 @@ float pavingHeight(vec2 xz) {
 // March the view ray down into the relief, layer by layer, and return where it hits
 // (the same steps as parallaxUV in hall.frag). V points from the surface to the eye.
 vec2 pavingParallax(vec2 xz, vec3 V, out float hitDepth) {
-    float layers = mix(40.0, 12.0, clamp(V.y, 0.0, 1.0));   // more layers at grazing angles
+    float layers = mix(pomLayers.y, pomLayers.x, clamp(V.y, 0.0, 1.0));   // more layers at grazing angles (Q)
     float layerDepth = 1.0 / layers;
     vec2 delta = -V.xz / max(V.y, 0.12) * pavingDepth * layerDepth;   // one layer deeper = this far along
     float rayDepth = 0.0;
     float surfaceDepth = 1.0 - pavingHeight(xz);
-    for (int i = 0; i < 48 && rayDepth < surfaceDepth; i++) {
+    for (int i = 0; i < 128 && rayDepth < surfaceDepth; i++) {
         xz += delta;
         rayDepth += layerDepth;
         surfaceDepth = 1.0 - pavingHeight(xz);
@@ -164,7 +166,7 @@ vec2 pavingParallax(vec2 xz, vec3 V, out float hitDepth) {
 // Self-shadowing: walk from the hit point towards the moon; if a slab edge is above the
 // ray, the point is in shadow (like parallaxShadow in hall.frag).
 float pavingShadow(vec2 xz, float hitDepth, vec3 L) {
-    const int steps = 12;
+    int steps = shadowSteps;   // Q: Low 8, Medium 16, High 32
     float layerDepth = hitDepth / float(steps);
     vec2 delta = L.xz / max(L.y, 0.2) * pavingDepth * layerDepth;
     float blocked = 0.0;
@@ -228,6 +230,7 @@ void main() {
         return;
     }
     vec3 n = normalize(Normal);
+    vec3 moonDir = normalize(lightDir);
     vec3 viewDir = normalize(cameraPos - FragPos);   // moved up here: the paving's POM needs it
     float moonShadow = 1.0;   // 0 = in the shadow of the paving's own relief
     float wrap = 0.0;         // leaves and petals: light also reaches round to the dark side
